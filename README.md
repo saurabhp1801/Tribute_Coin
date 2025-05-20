@@ -1,209 +1,61 @@
-# MagaFox47 Token Contract Documentation
+# MagaFox47 Hardhat Testing Guide
 
-A comprehensive guide to the MagaFox47 ERC20 token contract, which includes advanced features such as charity donations, vesting schedules, transaction fees, and robust tokenomics.
+This guide provides a comprehensive set of Hardhat console commands to test the MagaFox47 ERC20 token contract. Each section includes commands to run and their expected outputs, aligned with the current contract implementation.
 
-## Overview
+## Prerequisites
 
-MagaFox47 is an ERC20 token with the following key features:
-- Role-based access control for administrative functions
-- Charity donation functionality with approved charity management
-- Vesting schedules for different token allocations
-- Transaction fees that support hunger initiatives
-- Pausing capability for emergency situations
-- Buyback and burn mechanism
-
-## Contract Specifications
-
-- **Token Name**: MagaFox47
-- **Symbol**: MAGA
-- **Total Supply**: 1,000,000,000 tokens (configurable)
-- **Decimals**: 18 (ERC20 default)
-
-## Tokenomics
-
-The contract implements the following token allocation:
-
-| Allocation | Percentage | Amount | Vesting Schedule |
-|------------|------------|--------|-----------------|
-| Charity Fund | 40% | 400M | Quarterly release over 2.5 years |
-| Private Sale | 20% | 200M | Linear vesting over 1 year |
-| Public Sale | 20% | 200M | Linear vesting over 6 months |
-| Development Fund | 10% | 100M | Monthly release over 1 year |
-| Team & Advisors | 5% | 50M | 12-month cliff, then 24-month vesting |
-| Community Rewards | 5% | 50M | Linear vesting over 2 years |
-
-## Key Roles
-
-The contract implements role-based access control:
-
-- **DEFAULT_ADMIN_ROLE**: Can grant/revoke roles, pause/unpause the contract, and update contract metadata
-- **MINTER_ROLE**: Can mint new tokens
-- **CHARITY_ADMIN_ROLE**: Can manage approved charities and execute donations
-
-## Wallet Types
-
-The contract defines the following wallet types:
-
-- `CHARITY_FUND`: Receives transaction fees for charitable causes
-- `TEAM_ADVISORS`: For team and advisor allocations
-- `DEVELOPMENT_FUND`: For development expenses
-- `COMMUNITY_REWARDS`: For community rewards and staking
-- `LIQUIDITY_POOL`: Receives a portion of transaction fees
-- `TREASURY`: For token buyback and other operations
-- `PRIVATE_SALE`: For private sale allocations
-- `PUBLIC_SALE`: For public sale allocations
-
-## Main Functions
-
-### Administrative Functions
-
-```solidity
-// Wallet management
-function allocateWallets(WalletType[] calldata walletTypes, address[] calldata walletAddresses) external onlyOwner
-
-// Contract state management
-function setContractState(uint8 stateType, bool enabled) external onlyOwner
-// stateType: 1=Minting, 2=Transaction Fees, 3=Lock Tokenomics, 4=Pause/Unpause
-
-// Transaction fees
-function setTransactionFeePercent(uint256 feePercent) external onlyOwner
-
-// Contract state
-function transferAdminRole(address newAdmin) external
-function updateImageURI(string memory newImageURI) external
-```
-
-### Charity Management Functions
-
-```solidity
-function manageCharity(uint8 actionType, address charityAddress, string memory charityName) external
-// actionType: 1=Add Charity, 2=Remove Charity
-
-function getCharityCount() external view returns (uint256)
-function donateToCharity(address charityAddress, uint256 amount) external nonReentrant
-```
-
-### Token Release Functions
-
-```solidity
-function releaseTokens(uint8 allocationType, address beneficiary, uint256 amount) external onlyOwner nonReentrant
-// allocationType: 1=TeamAdvisors, 2=DevelopmentFund, 3=PrivateSale, 4=PublicSale, 5=CommunityRewards
-```
-
-### Token Operations
-
-```solidity
-function mint(address to, uint256 amount, bool enforceOneMintPerAddress) public nonReentrant
-function mintWithoutRestriction(address to, uint256 amount) public
-function executeBuyback(uint256 amount) external onlyOwner nonReentrant
-```
-
-### View Functions
-
-```solidity
-function imageURI() external view returns (string memory)
-function getCharityCount() external view returns (uint256)
-function supportsInterface(bytes4 interfaceId) public view override returns (bool)
-```
-
-## Transaction Fee Mechanism
-
-When transaction fees are enabled:
-- A configurable percentage (default 1%, max 5%) is taken from transfers
-- 50% of the fee goes to the Charity Fund wallet
-- 50% of the fee goes to the Liquidity Pool wallet
-
-## Vesting Mechanism
-
-The contract implements linear vesting for all token allocations:
-- Tokens unlock at a constant rate over the duration
-- Each allocation has its own start time and duration
-- Released tokens are minted to the beneficiary's address when requested
-
-## Security Considerations
-
-The contract implements several security features:
-- Role-based access control for sensitive operations
-- Custom error messages for better error handling and gas efficiency
-- Pause functionality for emergency situations
-- Input validation for critical parameters
-- Prevention of zero-address transfers
-- Tokenomics locking to prevent modifications after deployment
-- ReentrancyGuard for functions involving token transfers
-
-## Custom Errors
-
-For gas optimization, the contract uses custom errors instead of require statements:
-
-- `Unauthorized`: Called by unauthorized address
-- `InvalidInput`: Invalid input parameters provided
-- `ContractState`: Called when contract is in the wrong state (paused, minting disabled, etc.)
-- `AllocationExceeded`: Trying to release more tokens than available
-- `OwnableUnauthorizedAccount`: Called by non-owner account for onlyOwner functions
-
-## Dependencies
-
-The contract uses the following OpenZeppelin contracts:
-- AccessControl
-- ERC20Burnable
-- ERC20
-- Pausable
-- Ownable
-- ReentrancyGuard
-
-## Hardhat Console Testing Guide
-
-This section provides a comprehensive set of Hardhat console commands to test the MagaFox47 ERC20 token contract. Each section includes the commands to run and the expected output.
-
-### Prerequisites
-
-- Node.js (v14+ recommended)
+- Node.js (v16+ recommended)
 - Hardhat installed (`npm install --save-dev hardhat`)
 - Required dependencies:
-  ```
+  ```bash
   npm install --save-dev @openzeppelin/contracts @nomiclabs/hardhat-ethers ethers
   ```
 
-### Getting Started
+## Getting Started
 
-1. Clone the repository or set up your Hardhat project
-2. Ensure the MagaFox47 contract is in your `contracts` directory
+1. Set up your Hardhat project
+2. Place the MagaFox47 contract in your `contracts` directory
 3. Start the Hardhat console:
 
 ```bash
 npx hardhat console --network hardhat
 ```
 
-### Test Commands and Expected Outputs
+## Test Commands
 
-#### 1. Setting Up Accounts and Contract
+### 1. Setting Up Accounts and Deploying the Contract
 
-**Commands:**
 ```javascript
 // Get test accounts
-const [owner, user1, user2, charityWallet, privateSaleBuyer, publicSaleBuyer, devFundReceiver] = await ethers.getSigners();
+const [owner, user1, user2, charityWallet, liquidityWallet, stakingWallet, teamWallet, seedInvestor, privateInvestor, idoParticipant] = await ethers.getSigners();
 
 // Get contract factory
 const MagaFox47 = await ethers.getContractFactory("MagaFox47");
 
 // Deploy contract with initial parameters
-const totalSupply = ethers.parseEther("1000000000");
+const totalSupply = ethers.parseEther("1000000000"); // 1 billion tokens
+const tokenImageURI = "https://example.com/token-image.png";
+
+// Set up initial wallets for all WalletType enums (0-9)
 const initialWallets = [
-  charityWallet.address, // CHARITY_FUND
-  user1.address,         // TEAM_ADVISORS
-  user2.address,         // DEVELOPMENT_FUND
-  ethers.ZeroAddress,    // COMMUNITY_REWARDS
-  ethers.ZeroAddress,    // LIQUIDITY_POOL
-  owner.address,         // TREASURY
-  privateSaleBuyer.address, // PRIVATE_SALE
-  publicSaleBuyer.address   // PUBLIC_SALE
+  charityWallet.address,   // CHARITY_TREASURY (0)
+  seedInvestor.address,    // SEED (1)
+  privateInvestor.address, // PRIVATE_STRATEGIC (2)
+  idoParticipant.address,  // COMMUNITY_IDO (3)
+  liquidityWallet.address, // LIQUIDITY_AUCTION (4)
+  stakingWallet.address,   // STAKING_REWARDS (5)
+  liquidityWallet.address, // LIQUIDITY_MAKING (6)
+  teamWallet.address,      // TEAM_ADVISORS (7)
+  user1.address,           // GROWTH_PARTNERSHIPS (8)
+  user2.address            // FUTURE_DAO_RESERVE (9)
 ];
 
+// Deploy the contract
 const magaFox = await MagaFox47.deploy(
   "MagaFox47", 
   "MAGA", 
   totalSupply, 
-  "https://example.com/token-image.png",
+  tokenImageURI,
   initialWallets
 );
 
@@ -213,18 +65,15 @@ await magaFox.waitForDeployment();
 // Get contract address
 const magaFoxAddress = await magaFox.getAddress();
 console.log("Contract deployed to:", magaFoxAddress);
-
 ```
 
-**Expected Output:**
+Expected Output:
 ```
 Contract deployed to: 0x5FbDB2315678afecb367f032d93F642f64180aa3
 ```
-(Note: Your contract address will be different)
 
-#### 2. Basic Contract Information
+### 2. Basic Contract Information
 
-**Commands:**
 ```javascript
 // Get token name and symbol
 const name = await magaFox.name();
@@ -235,31 +84,25 @@ console.log(`Token name: ${name}, Symbol: ${symbol}`);
 const imageURI = await magaFox.imageURI();
 console.log(`Token image URI: ${imageURI}`);
 
-// Get total supply
+// Get total supply (should be 0 initially as tokens are in allocations)
 const supply = await magaFox.totalSupply();
 console.log(`Total supply: ${ethers.formatEther(supply)} tokens`);
-
-// Get initial balance (should be 0 since tokens are in allocations)
-const ownerBalance = await magaFox.balanceOf(owner.address);
-console.log(`Owner balance: ${ethers.formatEther(ownerBalance)} tokens`);
 ```
 
-**Expected Output:**
+Expected Output:
 ```
 Token name: MagaFox47, Symbol: MAGA
 Token image URI: https://example.com/token-image.png
-Total supply: 0.0 tokens  // Initially 0 because tokens are not minted yet
-Owner balance: 0.0 tokens
+Total supply: 0.0 tokens
 ```
 
-#### 3. Testing Role-Based Access Control
+### 3. Testing Role-Based Access Control
 
-**Commands:**
 ```javascript
 // Check owner roles
-const MINTER_ROLE = ethers.keccak256(ethers.toUtf8Bytes("MINTER_ROLE"));
-const CHARITY_ADMIN_ROLE = ethers.keccak256(ethers.toUtf8Bytes("CHARITY_ADMIN_ROLE"));
-const DEFAULT_ADMIN_ROLE = "0x0000000000000000000000000000000000000000000000000000000000000000";
+const MINTER_ROLE = await magaFox.MINTER_ROLE();
+const CHARITY_ADMIN_ROLE = await magaFox.CHARITY_ADMIN_ROLE();
+const DEFAULT_ADMIN_ROLE = await magaFox.DEFAULT_ADMIN_ROLE();
 
 const isOwnerAdmin = await magaFox.hasRole(DEFAULT_ADMIN_ROLE, owner.address);
 const isOwnerMinter = await magaFox.hasRole(MINTER_ROLE, owner.address);
@@ -270,283 +113,304 @@ console.log(`Owner is admin: ${isOwnerAdmin}, Owner is minter: ${isOwnerMinter},
 await magaFox.grantRole(MINTER_ROLE, user1.address);
 const isUser1Minter = await magaFox.hasRole(MINTER_ROLE, user1.address);
 console.log(`User1 is minter: ${isUser1Minter}`);
-
-// Enable minting to test minting functionality
-await magaFox.setContractState(1, true); // 1 = Minting status, true = enable
-console.log(`Minting enabled: ${await magaFox.isMintingEnabled()}`);
-
-// Test minting with user1 account
-await magaFox.connect(user1).mint(user2.address, ethers.parseEther("1000"), true);
-const user2Balance = await magaFox.balanceOf(user2.address);
-console.log(`User2 balance after mint: ${ethers.formatEther(user2Balance)} tokens`);
 ```
 
-**Expected Output:**
+Expected Output:
 ```
 Owner is admin: true, Owner is minter: true, Owner is charity admin: true
 User1 is minter: true
-Minting enabled: true
-User2 balance after mint: 1000.0 tokens
 ```
 
-#### 4. Testing Tokenomics
+### 4. Testing Contract State Management
 
-**Commands:**
 ```javascript
-// Check tokenomics allocations
-const charityFund = await magaFox.charityFund();
-const privateSale = await magaFox.privateSale();
-const publicSale = await magaFox.publicSale();
-const developmentFund = await magaFox.developmentFund();
-const teamAdvisors = await magaFox.teamAdvisors();
-const communityRewards = await magaFox.communityRewards();
+// Check initial minting state
+const isMintingEnabledBefore = await magaFox.isMintingEnabled();
+console.log(`Minting enabled before: ${isMintingEnabledBefore}`);
 
-console.log("Charity Fund:", {
-  totalAmount: ethers.formatEther(charityFund.totalAmount),
-  released: ethers.formatEther(charityFund.released),
-  startTime: new Date(Number(charityFund.startTime) * 1000).toISOString(),
-  duration: `${Number(charityFund.duration) / (24*60*60)} days`,
-  locked: charityFund.locked
-});
+// Enable minting
+await magaFox.setContractState(1, true); // 1 = Minting status, true = enable
+const isMintingEnabledAfter = await magaFox.isMintingEnabled();
+console.log(`Minting enabled after: ${isMintingEnabledAfter}`);
 
-console.log("Private Sale:", {
-  totalAmount: ethers.formatEther(privateSale.totalAmount),
-  released: ethers.formatEther(privateSale.released),
-  startTime: new Date(Number(privateSale.startTime) * 1000).toISOString(),
-  duration: `${Number(privateSale.duration) / (24*60*60)} days`,
-  locked: privateSale.locked
-});
-
-console.log("Team & Advisors:", {
-  totalAmount: ethers.formatEther(teamAdvisors.totalAmount),
-  released: ethers.formatEther(teamAdvisors.released),
-  startTime: new Date(Number(teamAdvisors.startTime) * 1000).toISOString(),
-  duration: `${Number(teamAdvisors.duration) / (24*60*60)} days`,
-  locked: teamAdvisors.locked
-});
-```
-
-**Expected Output:**
-```
-Charity Fund: {
-  totalAmount: '400000000.0',
-  released: '0.0',
-  startTime: '2025-04-21T15:30:00.000Z', // This will be your current timestamp
-  duration: '900 days', // 10 quarters
-  locked: false
-}
-Private Sale: {
-  totalAmount: '200000000.0',
-  released: '0.0',
-  startTime: '2025-04-21T15:30:00.000Z', // This will be your current timestamp
-  duration: '365 days',
-  locked: false
-}
-Team & Advisors: {
-  totalAmount: '50000000.0',
-  released: '0.0',
-  startTime: '2026-04-21T15:30:00.000Z', // This will be your current timestamp + 1 year (cliff)
-  duration: '730 days', // 24 months after cliff
-  locked: false
-}
-```
-
-#### 5. Testing Wallet Allocation
-
-**Commands:**
-```javascript
-// Check if wallets are already allocated from constructor
-const isCharityWalletAllocated = await magaFox.isWalletAllocated(0); // CHARITY_FUND = 0
-const charityWalletAddress = await magaFox.allocatedWallets(0);
-console.log(`Charity wallet allocated: ${isCharityWalletAllocated}`);
-console.log(`Charity wallet address: ${charityWalletAddress}`);
-
-// Allocate additional wallets using the updated function
-await magaFox.allocateWallets(
-  [4], // LIQUIDITY_POOL = 4
-  [user1.address]
-);
-
-const liquidityWalletAddress = await magaFox.allocatedWallets(4);
-console.log(`Liquidity wallet address: ${liquidityWalletAddress}`);
-```
-
-**Expected Output:**
-```
-Charity wallet allocated: true
-Charity wallet address: 0x70997970C51812dc3A010C7d01b50e0d17dc79C8 // charityWallet's address
-Liquidity wallet address: 0x70997970C51812dc3A010C7d01b50e0d17dc79C8 // user1's address
-```
-
-#### 6. Testing Charity Management
-
-**Commands:**
-```javascript
-// Approve a charity
-await magaFox.manageCharity(1, charityWallet.address, "Hunger Relief Fund"); // 1 = Add charity
-const charityInfo = await magaFox.approvedCharities(charityWallet.address);
-console.log(`Charity name: ${charityInfo.name}, Approved: ${charityInfo.approved}`);
-
-// Check charity count
-const charityCount = await magaFox.getCharityCount();
-console.log(`Number of approved charities: ${charityCount}`);
-
-// Donate to charity
-await magaFox.donateToCharity(charityWallet.address, ethers.parseEther("1000"));
-const charityBalance = await magaFox.balanceOf(charityWallet.address);
-console.log(`Charity wallet balance after donation: ${ethers.formatEther(charityBalance)} tokens`);
-```
-
-**Expected Output:**
-```
-Charity name: Hunger Relief Fund, Approved: true
-Number of approved charities: 1
-Charity wallet balance after donation: 1000.0 tokens
-```
-
-#### 7. Testing Vesting and Token Release
-
-**Commands:**
-```javascript
-// Fast forward time to simulate vesting progress (1 month)
-await network.provider.send("evm_increaseTime", [30 * 24 * 60 * 60]);
-await network.provider.send("evm_mine");
-
-// Release private sale tokens
-await magaFox.releaseTokens(3, privateSaleBuyer.address, ethers.parseEther("10000")); // 3 = PrivateSale
-const privateSaleBuyerBalance = await magaFox.balanceOf(privateSaleBuyer.address);
-console.log(`Private sale buyer balance: ${ethers.formatEther(privateSaleBuyerBalance)} tokens`);
-
-// Release development funds
-await magaFox.releaseTokens(2, devFundReceiver.address, ethers.parseEther("5000")); // 2 = DevelopmentFund
-const devReceiverBalance = await magaFox.balanceOf(devFundReceiver.address);
-console.log(`Development fund receiver balance: ${ethers.formatEther(devReceiverBalance)} tokens`);
-
-// Fast forward more time (6 months)
-await network.provider.send("evm_increaseTime", [180 * 24 * 60 * 60]);
-await network.provider.send("evm_mine");
-
-// Release public sale tokens
-await magaFox.releaseTokens(4, publicSaleBuyer.address, ethers.parseEther("20000")); // 4 = PublicSale
-const publicSaleBuyerBalance = await magaFox.balanceOf(publicSaleBuyer.address);
-console.log(`Public sale buyer balance: ${ethers.formatEther(publicSaleBuyerBalance)} tokens`);
-
-// Fast forward more time (1 year to reach team tokens cliff)
-await network.provider.send("evm_increaseTime", [365 * 24 * 60 * 60]);
-await network.provider.send("evm_mine");
-
-// Release team tokens after cliff
-await magaFox.releaseTokens(1, user2.address, ethers.parseEther("5000")); // 1 = TeamAdvisors
-const teamTokensBalance = await magaFox.balanceOf(user2.address);
-console.log(`Team tokens balance (after cliff): ${ethers.formatEther(teamTokensBalance)} tokens`);
-```
-
-**Expected Output:**
-```
-Private sale buyer balance: 10000.0 tokens
-Development fund receiver balance: 5000.0 tokens
-Public sale buyer balance: 20000.0 tokens
-Team tokens balance (after cliff): 6000.0 tokens  // 1000 from previous mint + 5000 from team allocation
-```
-
-#### 8. Testing Transaction Fees
-
-**Commands:**
-```javascript
-// Set transaction fee percent (2%)
-await magaFox.setTransactionFeePercent(200); // 200 basis points = 2%
-console.log(`Transaction fee set to: ${await magaFox.transactionFeePercent()} basis points`);
+// Check transaction fees
+const txFeesEnabledBefore = await magaFox.transactionFeesEnabled();
+const txFeePercent = await magaFox.transactionFeePercent();
+console.log(`Transaction fees enabled: ${txFeesEnabledBefore}, Fee percent: ${txFeePercent} (${Number(txFeePercent)/100}%)`);
 
 // Enable transaction fees
 await magaFox.setContractState(2, true); // 2 = Transaction fees, true = enable
-console.log(`Transaction fees enabled: ${await magaFox.transactionFeesEnabled()}`);
+const txFeesEnabledAfter = await magaFox.transactionFeesEnabled();
+console.log(`Transaction fees enabled after: ${txFeesEnabledAfter}`);
 
-// Check balances before transfer with fees
-const user1BalanceBefore = await magaFox.balanceOf(user1.address);
+// Update transaction fee percent
+await magaFox.setTransactionFeePercent(200); // 200 = 2%
+const newTxFeePercent = await magaFox.transactionFeePercent();
+console.log(`New transaction fee percent: ${newTxFeePercent} (${Number(newTxFeePercent)/100}%)`);
+```
+
+Expected Output:
+```
+Minting enabled before: false
+Minting enabled after: true
+Transaction fees enabled: false, Fee percent: 100 (1%)
+Transaction fees enabled after: true
+New transaction fee percent: 200 (2%)
+```
+
+### 5. Testing Wallet Allocation
+
+```javascript
+// Check initial wallet allocations
+const charityWalletType = 0; // CHARITY_TREASURY
+const liquidityMakingType = 6; // LIQUIDITY_MAKING
+
+const charityWalletAddress = await magaFox.allocatedWallets(charityWalletType);
+const isCharityWalletAllocated = await magaFox.isWalletAllocated(charityWalletType);
+console.log(`Charity Treasury wallet allocated: ${isCharityWalletAllocated}`);
+console.log(`Charity Treasury wallet address: ${charityWalletAddress}`);
+
+const liquidityWalletAddress = await magaFox.allocatedWallets(liquidityMakingType);
+const isLiquidityWalletAllocated = await magaFox.isWalletAllocated(liquidityMakingType);
+console.log(`Liquidity Making wallet allocated: ${isLiquidityWalletAllocated}`);
+console.log(`Liquidity Making wallet address: ${liquidityWalletAddress}`);
+
+// Allocate new wallets
+await magaFox.allocateWallets(
+  [5, 8], // STAKING_REWARDS (5), GROWTH_PARTNERSHIPS (8)
+  [user1.address, user2.address]
+);
+
+// Check new wallet allocations
+const newStakingWalletAddress = await magaFox.allocatedWallets(5);
+const newGrowthWalletAddress = await magaFox.allocatedWallets(8);
+console.log(`New Staking Rewards wallet address: ${newStakingWalletAddress}`);
+console.log(`New Growth Partnerships wallet address: ${newGrowthWalletAddress}`);
+```
+
+Expected Output:
+```
+Charity Treasury wallet allocated: true
+Charity Treasury wallet address: 0x70997970C51812dc3A010C7d01b50e0d17dc79C8
+Liquidity Making wallet allocated: true
+Liquidity Making wallet address: 0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC
+New Staking Rewards wallet address: 0x90F79bf6EB2c4f870365E785982E1f101E93b906
+New Growth Partnerships wallet address: 0x15d34AAf54267DB7D7c367839AAf71A00a2C6A65
+```
+
+### 6. Testing Charity Management
+
+```javascript
+// Add a new charity
+const newCharityAddress = user2.address;
+const charityName = "Hunger Relief Foundation";
+
+await magaFox.manageCharity(1, newCharityAddress, charityName); // 1 = Add charity
+const charityInfo = await magaFox.approvedCharities(newCharityAddress);
+console.log(`Charity name: ${charityInfo.name}, Approved: ${charityInfo.approved}, Donated: ${ethers.formatEther(charityInfo.donated)}`);
+
+// Get charity count
+const charityCount = await magaFox.getCharityCount();
+console.log(`Number of approved charities: ${charityCount}`);
+
+// Donate to charity (we need to enable minting first)
+await magaFox.donateToCharity(newCharityAddress, ethers.parseEther("1000"));
+const charityBalance = await magaFox.balanceOf(newCharityAddress);
+const charityInfoAfterDonation = await magaFox.approvedCharities(newCharityAddress);
+console.log(`Charity balance after donation: ${ethers.formatEther(charityBalance)} tokens`);
+console.log(`Recorded donation: ${ethers.formatEther(charityInfoAfterDonation.donated)} tokens`);
+
+// Remove a charity
+await magaFox.manageCharity(2, newCharityAddress, ""); // 2 = Remove charity
+const charityInfoAfterRemoval = await magaFox.approvedCharities(newCharityAddress);
+console.log(`Charity approved after removal: ${charityInfoAfterRemoval.approved}`);
+
+// Check charity count after removal
+const charityCountAfterRemoval = await magaFox.getCharityCount();
+console.log(`Number of approved charities after removal: ${charityCountAfterRemoval}`);
+```
+
+Expected Output:
+```
+Charity name: Hunger Relief Foundation, Approved: true, Donated: 0.0
+Number of approved charities: 1
+Charity balance after donation: 1000.0 tokens
+Recorded donation: 1000.0 tokens
+Charity approved after removal: false
+Number of approved charities after removal: 0
+```
+
+### 7. Testing Minting
+
+```javascript
+// Check if user has minted before
+const hasUser1Minted = await magaFox.hasAddressMinted(user1.address);
+console.log(`Has user1 minted before: ${hasUser1Minted}`);
+
+// Mint tokens with one-per-address restriction
+await magaFox.mint(user1.address, ethers.parseEther("5000"), true);
+const user1Balance = await magaFox.balanceOf(user1.address);
+console.log(`User1 balance after mint: ${ethers.formatEther(user1Balance)} tokens`);
+
+// Check if user has minted after
+const hasUser1MintedAfter = await magaFox.hasAddressMinted(user1.address);
+console.log(`Has user1 minted after: ${hasUser1MintedAfter}`);
+
+// Try to mint again with one-per-address restriction (should fail)
+let mintSucceeded = true;
+try {
+  await magaFox.mint(user1.address, ethers.parseEther("1000"), true);
+} catch (error) {
+  mintSucceeded = false;
+  console.log("Second mint with restriction failed as expected");
+}
+console.log(`Second mint succeeded: ${mintSucceeded}`);
+
+// Mint without restriction
+await magaFox.mintWithoutRestriction(user1.address, ethers.parseEther("2000"));
+const user1BalanceAfter = await magaFox.balanceOf(user1.address);
+console.log(`User1 balance after unrestricted mint: ${ethers.formatEther(user1BalanceAfter)} tokens`);
+```
+
+Expected Output:
+```
+Has user1 minted before: false
+User1 balance after mint: 5000.0 tokens
+Has user1 minted after: true
+Second mint with restriction failed as expected
+Second mint succeeded: false
+User1 balance after unrestricted mint: 7000.0 tokens
+```
+
+### 8. Testing Token Transfers and Fees
+
+```javascript
+// Mint tokens to user2 for testing transfers
+await magaFox.mintWithoutRestriction(user2.address, ethers.parseEther("10000"));
+const user2BalanceBefore = await magaFox.balanceOf(user2.address);
+console.log(`User2 balance before transfer: ${ethers.formatEther(user2BalanceBefore)} tokens`);
+
+// Check charity and liquidity wallet balances before transfer
 const charityWalletBalanceBefore = await magaFox.balanceOf(charityWallet.address);
-console.log(`User1 balance before: ${ethers.formatEther(user1BalanceBefore)} tokens`);
+const liquidityWalletBalanceBefore = await magaFox.balanceOf(liquidityWallet.address);
 console.log(`Charity wallet balance before: ${ethers.formatEther(charityWalletBalanceBefore)} tokens`);
+console.log(`Liquidity wallet balance before: ${ethers.formatEther(liquidityWalletBalanceBefore)} tokens`);
 
-// Transfer tokens with fees applied
+// Transfer tokens with fees
 await magaFox.connect(user2).transfer(user1.address, ethers.parseEther("1000"));
 
-// Check balances after transfer with fees
-const user1BalanceAfter = await magaFox.balanceOf(user1.address);
-const charityWalletBalanceAfter = await magaFox.balanceOf(charityWallet.address);
-console.log(`User1 balance after: ${ethers.formatEther(user1BalanceAfter)} tokens`);
-console.log(`Charity wallet balance after: ${ethers.formatEther(charityWalletBalanceAfter)} tokens`);
-console.log(`Charity wallet received: ${ethers.formatEther(charityWalletBalanceAfter - charityWalletBalanceBefore)} tokens`);
-```
-
-**Expected Output:**
-```
-Transaction fee set to: 200 basis points
-Transaction fees enabled: true
-User1 balance before: 0.0 tokens
-Charity wallet balance before: 1000.0 tokens
-User1 balance after: 980.0 tokens  // 1000 - 2% fee
-Charity wallet balance after: 1010.0 tokens
-Charity wallet received: 10.0 tokens  // Half of the 2% fee (1000 * 0.02 / 2)
-```
-
-#### 9. Testing Pausing Functionality
-
-**Commands:**
-```javascript
-// Check initial pause state
-const isPaused = await magaFox.paused();
-console.log(`Contract is paused: ${isPaused}`);
-
-// Pause the contract
-await magaFox.setContractState(4, true); // 4 = Pause/Unpause, true = pause
-console.log(`Contract is now paused: ${await magaFox.paused()}`);
-
-// Try to transfer tokens while paused (should fail)
-try {
-  await magaFox.connect(user1).transfer(user2.address, ethers.parseEther("100"));
-  console.log("Transfer succeeded while paused (this is incorrect behavior)");
-} catch (error) {
-  console.log("Transfer failed while paused (expected behavior)");
-}
-
-// Unpause the contract
-await magaFox.setContractState(4, false); // 4 = Pause/Unpause, false = unpause
-console.log(`Contract is now paused: ${await magaFox.paused()}`);
-
-// Try to transfer tokens after unpausing
-await magaFox.connect(user1).transfer(user2.address, ethers.parseEther("100"));
+// Check balances after transfer
+const user1BalanceAfterTransfer = await magaFox.balanceOf(user1.address);
 const user2BalanceAfterTransfer = await magaFox.balanceOf(user2.address);
+const charityWalletBalanceAfter = await magaFox.balanceOf(charityWallet.address);
+const liquidityWalletBalanceAfter = await magaFox.balanceOf(liquidityWallet.address);
+
+console.log(`User1 balance after transfer: ${ethers.formatEther(user1BalanceAfterTransfer)} tokens`);
 console.log(`User2 balance after transfer: ${ethers.formatEther(user2BalanceAfterTransfer)} tokens`);
+console.log(`Charity wallet balance after: ${ethers.formatEther(charityWalletBalanceAfter)} tokens`);
+console.log(`Liquidity wallet balance after: ${ethers.formatEther(liquidityWalletBalanceAfter)} tokens`);
+
+// Calculate fee amounts
+const totalFee = ethers.parseEther("1000") * BigInt(200) / BigInt(10000); // 2% of 1000 tokens
+const charityFee = totalFee / BigInt(2);
+const liquidityFee = totalFee / BigInt(2);
+
+console.log(`Total fee applied: ${ethers.formatEther(totalFee)} tokens`);
+console.log(`Charity fee: ${ethers.formatEther(charityFee)} tokens`);
+console.log(`Liquidity fee: ${ethers.formatEther(liquidityFee)} tokens`);
 ```
 
-**Expected Output:**
+Expected Output:
 ```
-Contract is paused: false
-Contract is now paused: true
-Transfer failed while paused (expected behavior)
-Contract is now paused: false
-User2 balance after transfer: 6100.0 tokens  // Previous balance (6000) + 100
+User2 balance before transfer: 10000.0 tokens
+Charity wallet balance before: 0.0 tokens
+Liquidity wallet balance before: 0.0 tokens
+User1 balance after transfer: 7980.0 tokens  // 7000 + 1000 - 20 (fee)
+User2 balance after transfer: 9000.0 tokens  // 10000 - 1000
+Charity wallet balance after: 10.0 tokens    // 0 + 10 (half of fee)
+Liquidity wallet balance after: 10.0 tokens  // 0 + 10 (half of fee)
+Total fee applied: 20.0 tokens
+Charity fee: 10.0 tokens
+Liquidity fee: 10.0 tokens
 ```
 
-#### 10. Testing Buyback Mechanism
+### 9. Testing Token Release from Allocations
 
-**Commands:**
 ```javascript
-// Mint some tokens to treasury for buyback
-await magaFox.mintWithoutRestriction(owner.address, ethers.parseEther("100000"));
-const treasuryBalanceBefore = await magaFox.balanceOf(owner.address);
-console.log(`Treasury balance before buyback: ${ethers.formatEther(treasuryBalanceBefore)} tokens`);
+// Fast forward time to simulate vesting progress (30 days)
+await network.provider.send("evm_increaseTime", [30 * 24 * 60 * 60]);
+await network.provider.send("evm_mine");
+
+// Check initial allocation balances
+const privateBuyerBalanceBefore = await magaFox.balanceOf(privateInvestor.address);
+console.log(`Private investor balance before: ${ethers.formatEther(privateBuyerBalanceBefore)} tokens`);
+
+// Release tokens from private strategic allocation
+await magaFox.releaseTokens(
+  2,  // PRIVATE_STRATEGIC
+  privateInvestor.address,
+  ethers.parseEther("5000")
+);
+
+// Check balance after release
+const privateBuyerBalanceAfter = await magaFox.balanceOf(privateInvestor.address);
+console.log(`Private investor balance after release: ${ethers.formatEther(privateBuyerBalanceAfter)} tokens`);
+
+// Try to release from community IDO allocation
+await magaFox.releaseTokens(
+  3,  // COMMUNITY_IDO
+  idoParticipant.address,
+  ethers.parseEther("10000")
+);
+
+// Check IDO participant balance
+const idoParticipantBalance = await magaFox.balanceOf(idoParticipant.address);
+console.log(`IDO participant balance: ${ethers.formatEther(idoParticipantBalance)} tokens`);
+
+// Fast forward time more (1 year - to reach seed investor cliff)
+await network.provider.send("evm_increaseTime", [335 * 24 * 60 * 60]); // 335 more days (365 total)
+await network.provider.send("evm_mine");
+
+// Release tokens from seed allocation after cliff
+await magaFox.releaseTokens(
+  1,  // SEED
+  seedInvestor.address,
+  ethers.parseEther("10000")
+);
+
+// Check seed investor balance
+const seedInvestorBalance = await magaFox.balanceOf(seedInvestor.address);
+console.log(`Seed investor balance after cliff: ${ethers.formatEther(seedInvestorBalance)} tokens`);
+```
+
+Expected Output:
+```
+Private investor balance before: 0.0 tokens
+Private investor balance after release: 5000.0 tokens
+IDO participant balance: 10000.0 tokens
+Seed investor balance after cliff: 10000.0 tokens
+```
+
+### 10. Testing Buyback and Burn
+
+```javascript
+// Mint some tokens to owner for buyback testing
+await magaFox.mintWithoutRestriction(owner.address, ethers.parseEther("50000"));
+const ownerBalanceBefore = await magaFox.balanceOf(owner.address);
+console.log(`Owner balance before buyback: ${ethers.formatEther(ownerBalanceBefore)} tokens`);
 
 // Get total supply before buyback
 const totalSupplyBefore = await magaFox.totalSupply();
 console.log(`Total supply before buyback: ${ethers.formatEther(totalSupplyBefore)} tokens`);
 
-// Execute buyback
+// Execute buyback (assuming owner is the charity treasury wallet for this test)
+// If not, we need to transfer tokens to the charity treasury wallet first
+await magaFox.allocateWallets([0], [owner.address]); // Set owner as charity treasury
 await magaFox.executeBuyback(ethers.parseEther("10000"));
 
-// Check treasury balance after buyback
-const treasuryBalanceAfter = await magaFox.balanceOf(owner.address);
-console.log(`Treasury balance after buyback: ${ethers.formatEther(treasuryBalanceAfter)} tokens`);
+// Check owner balance after buyback
+const ownerBalanceAfter = await magaFox.balanceOf(owner.address);
+console.log(`Owner balance after buyback: ${ethers.formatEther(ownerBalanceAfter)} tokens`);
 
 // Check total supply after buyback
 const totalSupplyAfter = await magaFox.totalSupply();
@@ -554,97 +418,126 @@ console.log(`Total supply after buyback: ${ethers.formatEther(totalSupplyAfter)}
 console.log(`Tokens burned: ${ethers.formatEther(totalSupplyBefore - totalSupplyAfter)} tokens`);
 ```
 
-**Expected Output:**
+Expected Output:
 ```
-Treasury balance before buyback: 100000.0 tokens
-Total supply before buyback: 137100.0 tokens  // Sum of all minted tokens so far
-Treasury balance after buyback: 90000.0 tokens
-Total supply after buyback: 127100.0 tokens
+Owner balance before buyback: 50000.0 tokens
+Total supply before buyback: 83000.0 tokens
+Owner balance after buyback: 40000.0 tokens
+Total supply after buyback: 73000.0 tokens
 Tokens burned: 10000.0 tokens
 ```
 
-#### 11. Testing Tokenomics Locking
+### 11. Testing Pausing Functionality
 
-**Commands:**
 ```javascript
+// Check initial pause state
+const isPaused = await magaFox.paused();
+console.log(`Contract is paused: ${isPaused}`);
+
+// Pause the contract
+await magaFox.setContractState(4, true); // 4 = Pause/Unpause, true = pause
+const isPausedAfter = await magaFox.paused();
+console.log(`Contract is paused after: ${isPausedAfter}`);
+
+// Try to transfer tokens while paused (should fail)
+let transferSucceeded = true;
+try {
+  await magaFox.connect(user1).transfer(user2.address, ethers.parseEther("100"));
+} catch (error) {
+  transferSucceeded = false;
+  console.log("Transfer failed while paused as expected");
+}
+console.log(`Transfer succeeded while paused: ${transferSucceeded}`);
+
+// Unpause the contract
+await magaFox.setContractState(4, false); // 4 = Pause/Unpause, false = unpause
+const isPausedAfterUnpause = await magaFox.paused();
+console.log(`Contract is paused after unpause: ${isPausedAfterUnpause}`);
+
+// Try to transfer tokens after unpausing
+await magaFox.connect(user1).transfer(user2.address, ethers.parseEther("100"));
+const user2BalanceAfterUnpause = await magaFox.balanceOf(user2.address);
+console.log(`User2 balance after transfer: ${ethers.formatEther(user2BalanceAfterUnpause)} tokens`);
+```
+
+Expected Output:
+```
+Contract is paused: false
+Contract is paused after: true
+Transfer failed while paused as expected
+Transfer succeeded while paused: false
+Contract is paused after unpause: false
+User2 balance after transfer: 9098.0 tokens  // 9000 + 98 (100 - 2% fee)
+```
+
+### 12. Testing Tokenomics Locking
+
+```javascript
+// Check if tokenomics are locked before
+const charityTreasury = await magaFox.charityTreasury();
+console.log(`Charity treasury locked before: ${charityTreasury.locked}`);
+
 // Lock tokenomics
 await magaFox.setContractState(3, true); // 3 = Lock tokenomics, true = lock
-const charityFundAfterLock = await magaFox.charityFund();
-console.log(`Tokenomics locked: ${charityFundAfterLock.locked}`);
+const charityTreasuryAfter = await magaFox.charityTreasury();
+console.log(`Charity treasury locked after: ${charityTreasuryAfter.locked}`);
 
-// Try to update a locked tokenomics allocation (should fail)
-try {
-  // This would throw an error due to locked tokenomics
-  await magaFox.updatePrivateSaleVesting(Math.floor(Date.now() / 1000), 30 * 24 * 60 * 60);
-  console.log("Updated allocation after locking (incorrect behavior)");
-} catch (error) {
-  console.log("Failed to update allocation after locking (expected behavior)");
-}
+// Check if other allocations are also locked
+const seed = await magaFox.seed();
+const privateStrategic = await magaFox.privateStrategic();
+console.log(`Seed allocation locked: ${seed.locked}`);
+console.log(`Private strategic allocation locked: ${privateStrategic.locked}`);
 ```
 
-**Expected Output:**
+Expected Output:
 ```
-Tokenomics locked: true
-Failed to update allocation after locking (expected behavior)
+Charity treasury locked before: false
+Charity treasury locked after: true
+Seed allocation locked: true
+Private strategic allocation locked: true
 ```
 
-#### 12. Testing Transfer Admin Role
+### 13. Testing Admin Role Transfer
 
-**Commands:**
 ```javascript
-// Check if user2 is admin before transfer
-const isUser2AdminBefore = await magaFox.hasRole(DEFAULT_ADMIN_ROLE, user2.address);
-console.log(`User2 is admin before transfer: ${isUser2AdminBefore}`);
+// Check admin role before transfer
+const isUser1AdminBefore = await magaFox.hasRole(DEFAULT_ADMIN_ROLE, user1.address);
+console.log(`Is user1 admin before transfer: ${isUser1AdminBefore}`);
 
-// Transfer admin role to user2
-await magaFox.transferAdminRole(user2.address);
+// Transfer admin role to user1
+await magaFox.transferAdminRole(user1.address);
 
-// Check roles after transfer
+// Check admin roles after transfer
 const isOwnerAdminAfter = await magaFox.hasRole(DEFAULT_ADMIN_ROLE, owner.address);
-const isUser2AdminAfter = await magaFox.hasRole(DEFAULT_ADMIN_ROLE, user2.address);
-console.log(`Owner is admin after transfer: ${isOwnerAdminAfter}`);
-console.log(`User2 is admin after transfer: ${isUser2AdminAfter}`);
+const isUser1AdminAfter = await magaFox.hasRole(DEFAULT_ADMIN_ROLE, user1.address);
+console.log(`Is owner admin after transfer: ${isOwnerAdminAfter}`);
+console.log(`Is user1 admin after transfer: ${isUser1AdminAfter}`);
+
+// Try to grant roles with new admin
+await magaFox.connect(user1).grantRole(CHARITY_ADMIN_ROLE, user2.address);
+const isUser2CharityAdmin = await magaFox.hasRole(CHARITY_ADMIN_ROLE, user2.address);
+console.log(`Is user2 charity admin: ${isUser2CharityAdmin}`);
 ```
 
-**Expected Output:**
+Expected Output:
 ```
-User2 is admin before transfer: false
-Owner is admin after transfer: false
-User2 is admin after transfer: true
+Is user1 admin before transfer: false
+Is owner admin after transfer: false
+Is user1 admin after transfer: true
+Is user2 charity admin: true
 ```
 
-## Common Issues and Troubleshooting
+## Troubleshooting Common Issues
 
-If you encounter errors while running these commands:
+1. **Gas Estimation Errors**: If you see "cannot estimate gas" errors, it often means the contract function is reverting. Check if you're hitting one of the custom errors like `Unauthorized`, `InvalidInput`, or `ContractState`.
 
-1. **TypeError: Cannot read properties of undefined**: Make sure you're using the correct ethers.js functions for your version. In newer versions, use `ethers.parseEther()` instead of `ethers.utils.parseEther()`.
+2. **Transaction Reverts**: For specific error messages, ensure you're meeting all the requirements for each function:
+   - Check that you have the correct role for the operation
+   - Verify that the contract isn't paused when it shouldn't be
+   - Ensure vesting periods are correct for token releases
 
-2. **Error: cannot estimate gas**: This usually means there's an issue with the contract itself or you're trying to call a function with incorrect parameters.
+3. **Function Not Found**: Double-check function names and parameters against the contract code.
 
-3. **Error: Transaction reverted**: Check the specific error message - this often indicates you've hit one of the contract's custom errors like `InvalidInput` or `Unauthorized` or `ContractState`.
+4. **BigInt Conversion**: Make sure to use BigInt for large numbers when doing calculations, especially with fees.
 
-4. **Contract method not found**: Ensure you've deployed the correct contract version and that all functions match the contract code.
-
-## Notes on Test Coverage
-
-These tests cover:
-
-- Basic token information and operations
-- Role-based access control
-- Vesting and release mechanisms
-- Pausing functionality
-- Admin operations
-- Tokenomics locking
-- Transaction fees
-- Charity management
-- Buyback mechanism
-
-However, for a production deployment, consider adding tests for:
-- Edge cases in vesting calculations
-- Gas optimization testing
-- Security audits and formal verification
-- Integration with frontend applications
-
-## License
-
-MIT License
+5. **Hardhat Network Issues**: If time manipulation commands fail, ensure you're running on the Hardhat network and not a forked network.

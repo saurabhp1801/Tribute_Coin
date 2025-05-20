@@ -9,7 +9,7 @@ import "@openzeppelin/contracts/security/Pausable.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 
-// Consolidated custom errors to reduce bytecode size and ireduce gas costs
+// Consolidated custom errors to reduce bytecode size and reduce gas costs
 error Unauthorized(address account, bytes32 role);
 error InvalidInput();
 error ContractState(string reason);
@@ -37,14 +37,16 @@ contract MagaFox47 is ERC20, ERC20Burnable, AccessControl, Pausable, Ownable, Re
 
     // Wallet addresses
     enum WalletType {
-        CHARITY_FUND,
+        CHARITY_TREASURY,
+        SEED,
+        PRIVATE_STRATEGIC,
+        COMMUNITY_IDO,
+        LIQUIDITY_AUCTION,
+        STAKING_REWARDS,
+        LIQUIDITY_MAKING,
         TEAM_ADVISORS,
-        DEVELOPMENT_FUND,
-        COMMUNITY_REWARDS,
-        LIQUIDITY_POOL,
-        TREASURY,
-        PRIVATE_SALE,
-        PUBLIC_SALE
+        GROWTH_PARTNERSHIPS,
+        FUTURE_DAO_RESERVE
     }
     mapping(WalletType => address) public allocatedWallets;
     mapping(WalletType => bool) public isWalletAllocated;
@@ -64,16 +66,21 @@ contract MagaFox47 is ERC20, ERC20Burnable, AccessControl, Pausable, Ownable, Re
         uint256 released;
         uint256 startTime;
         uint256 duration;
+        uint256 cliff;
         bool locked;
     }
 
     // Core tokenomics allocations
-    TokenAllocation public charityFund;     // 40%
-    TokenAllocation public privateSale;     // 20%
-    TokenAllocation public publicSale;      // 20%
-    TokenAllocation public developmentFund; // 10%
-    TokenAllocation public teamAdvisors;    // 5%
-    TokenAllocation public communityRewards; // 5%
+    TokenAllocation public charityTreasury;    // 20%
+    TokenAllocation public seed;               // 5%
+    TokenAllocation public privateStrategic;   // 7%
+    TokenAllocation public communityIDO;       // 10% 
+    TokenAllocation public liquidityAuction;   // 5%
+    TokenAllocation public stakingRewards;     // 15%
+    TokenAllocation public liquidityMaking;    // 10%
+    TokenAllocation public teamAdvisors;       // 10%
+    TokenAllocation public growthPartnerships; // 8%
+    TokenAllocation public futureDaoReserve;   // 10%
 
     // Events - consolidated to reduce bytecode
     event WalletAction(uint8 actionType, WalletType walletType, address wallet);
@@ -89,6 +96,7 @@ contract MagaFox47 is ERC20, ERC20Burnable, AccessControl, Pausable, Ownable, Re
         string memory symbol,
         uint256 initialSupply,
         string memory tokenImageURI,
+        
         address[] memory initialWallets
     ) ERC20(name, symbol) {
         // Grant roles to the deployer
@@ -109,7 +117,7 @@ contract MagaFox47 is ERC20, ERC20Burnable, AccessControl, Pausable, Ownable, Re
         
         // Allocate initial wallets if provided
         uint256 walletCount = initialWallets.length;
-        for (uint256 i = 0; i < walletCount && i < 8; i++) {
+        for (uint256 i = 0; i < walletCount && i < 10; i++) {
             if (initialWallets[i] != address(0)) {
                 allocatedWallets[WalletType(i)] = initialWallets[i];
                 isWalletAllocated[WalletType(i)] = true;
@@ -119,69 +127,131 @@ contract MagaFox47 is ERC20, ERC20Burnable, AccessControl, Pausable, Ownable, Re
     }
 
     /**
-     * @dev Initialize tokenomics allocations
+     * @dev Initialize tokenomics allocations according to provided table
      */
     function _initializeTokenomics(uint256 totalSupply) private {
         uint256 now_ = block.timestamp;
-        uint256 oneYear = 365 days;
-        uint256 oneMonth = 30 days;
-        uint256 oneQuarter = 90 days;
-
-        // 40% for charity fund (quarterly release)
-        charityFund = TokenAllocation({
-            totalAmount: (totalSupply * 4) / 10,
-            released: 0,
-            startTime: now_,
-            duration: oneQuarter * 10,
-            locked: false
-        });
-
-        // 20% for private sale (1-year vesting)
-        privateSale = TokenAllocation({
-            totalAmount: (totalSupply * 2) / 10,
-            released: 0,
-            startTime: now_,
-            duration: oneYear,
-            locked: false
-        });
-
-        // 20% for public sale (6-month release)
-        publicSale = TokenAllocation({
-            totalAmount: (totalSupply * 2) / 10,
-            released: 0,
-            startTime: now_,
-            duration: oneYear / 2,
-            locked: false
-        });
-
-        // 10% for development (monthly release)
-        developmentFund = TokenAllocation({
-            totalAmount: totalSupply / 10,
-            released: 0,
-            startTime: now_,
-            duration: oneMonth * 12,
-            locked: false
-        });
         
-        // 5% for team (12-month cliff, 24-month vesting)
-        teamAdvisors = TokenAllocation({
-            totalAmount: (totalSupply * 5) / 100,
-            released: 0,
-            startTime: now_ + oneYear,
-            duration: oneYear * 2,
-            locked: false
-        });
-        
-        // 5% for community rewards
-        communityRewards = TokenAllocation({
-            totalAmount: (totalSupply * 5) / 100,
-            released: 0,
-            startTime: now_,
-            duration: oneYear * 2,
-            locked: false
-        });
+        _initializeMainAllocations(totalSupply, now_);
+        _initializeSecondaryAllocations(totalSupply, now_);
 
         emit StatusChanged(1, true); // 1 = tokenomics initialized
+    }
+    
+    /**
+     * @dev Initialize main tokenomics allocations
+     */
+    function _initializeMainAllocations(uint256 totalSupply, uint256 now_) private {
+        uint256 oneMonth = 30 days;
+        uint256 oneYear = 365 days;
+
+        // 20% for charity treasury (5% unlocked each year)
+        charityTreasury = TokenAllocation({
+            totalAmount: (totalSupply * 20) / 100,
+            released: 0,
+            startTime: now_,
+            duration: oneYear * 20, // 5% per year for 20 years
+            cliff: 0, // No cliff
+            locked: false
+        });
+
+        // 5% for seed (12m cliff → 12m linear)
+        seed = TokenAllocation({
+            totalAmount: (totalSupply * 5) / 100,
+            released: 0,
+            startTime: now_ + oneYear, // 12m cliff
+            duration: oneYear, // 12m linear after cliff
+            cliff: oneYear,
+            locked: false
+        });
+
+        // 7% for private strategic (3m cliff → 9m linear)
+        privateStrategic = TokenAllocation({
+            totalAmount: (totalSupply * 7) / 100,
+            released: 0,
+            startTime: now_ + (oneMonth * 3), // 3m cliff
+            duration: oneMonth * 9, // 9m linear after cliff
+            cliff: oneMonth * 3,
+            locked: false
+        });
+
+        // 10% for community IDO (25% at TGE → 3m linear)
+        communityIDO = TokenAllocation({
+            totalAmount: (totalSupply * 10) / 100,
+            released: (totalSupply * 10 * 25) / 10000, // 25% of 10% released at TGE
+            startTime: now_,
+            duration: oneMonth * 3, // 3m linear for remaining
+            cliff: 0, // No cliff for remaining
+            locked: false
+        });
+        
+        // 5% for liquidity auction (100% locked 12m)
+        liquidityAuction = TokenAllocation({
+            totalAmount: (totalSupply * 5) / 100,
+            released: 0,
+            startTime: now_ + oneYear, // Locked for 12m
+            duration: 1 days, // All released after lock
+            cliff: oneYear,
+            locked: false
+        });
+    }
+    
+    /**
+     * @dev Initialize secondary tokenomics allocations
+     */
+    function _initializeSecondaryAllocations(uint256 totalSupply, uint256 now_) private {
+        uint256 oneMonth = 30 days;
+        uint256 oneYear = 365 days;
+        
+        // 15% for staking rewards (supply-halving every 18m)
+        stakingRewards = TokenAllocation({
+            totalAmount: (totalSupply * 15) / 100,
+            released: 0,
+            startTime: now_,
+            duration: oneMonth * 18 * 4, // 4 cycles of 18 months
+            cliff: 0,
+            locked: false
+        });
+        
+        // 10% for liquidity & market-making (12m lock, DAO-controlled)
+        liquidityMaking = TokenAllocation({
+            totalAmount: (totalSupply * 10) / 100,
+            released: 0,
+            startTime: now_ + oneYear, // 12m lock
+            duration: 1 days, // Released at DAO discretion after lock
+            cliff: oneYear,
+            locked: false
+        });
+        
+        // 10% for team & advisors (12m cliff → 36m linear)
+        teamAdvisors = TokenAllocation({
+            totalAmount: (totalSupply * 10) / 100,
+            released: 0,
+            startTime: now_ + oneYear, // 12m cliff
+            duration: oneMonth * 36, // 36m linear after cliff
+            cliff: oneYear,
+            locked: false
+        });
+        
+        // 8% for growth/partnerships (6m cliff → 24m linear)
+        growthPartnerships = TokenAllocation({
+            totalAmount: (totalSupply * 8) / 100,
+            released: 0,
+            startTime: now_ + (oneMonth * 6), // 6m cliff
+            duration: oneMonth * 24, // 24m linear after cliff
+            cliff: oneMonth * 6,
+            locked: false
+        });
+        
+        // 10% for future reserve/DAO grants (No unlock without vote)
+        futureDaoReserve = TokenAllocation({
+            totalAmount: (totalSupply * 10) / 100,
+            released: 0,
+            startTime: now_,
+            duration: 0, // Only unlocked by DAO vote
+            cliff: 0,
+            locked: false
+        });
     }
 
     /**
@@ -287,12 +357,12 @@ contract MagaFox47 is ERC20, ERC20Burnable, AccessControl, Pausable, Ownable, Re
         Charity storage charity = approvedCharities[charityAddress];
         if (!charity.approved) revert ContractState("NotApproved");
         
-        uint256 vested = _vestedAmount(charityFund);
-        uint256 releasable = vested - charityFund.released;
+        uint256 vested = _vestedAmount(charityTreasury);
+        uint256 releasable = vested - charityTreasury.released;
         
         if (amount > releasable) revert AllocationExceeded();
         
-        charityFund.released += amount;
+        charityTreasury.released += amount;
         charity.donated += amount;
         
         _mint(charityAddress, amount);
@@ -311,27 +381,85 @@ contract MagaFox47 is ERC20, ERC20Burnable, AccessControl, Pausable, Ownable, Re
      * @notice Lock tokenomics to prevent modifications
      */
     function _lockTokenomics() private {
-        charityFund.locked = true;
-        privateSale.locked = true;
-        publicSale.locked = true;
-        developmentFund.locked = true;
+        charityTreasury.locked = true;
+        seed.locked = true;
+        privateStrategic.locked = true;
+        communityIDO.locked = true;
+        liquidityAuction.locked = true;
+        stakingRewards.locked = true;
+        liquidityMaking.locked = true;
         teamAdvisors.locked = true;
-        communityRewards.locked = true;
+        growthPartnerships.locked = true;
+        futureDaoReserve.locked = true;
 
         emit StatusChanged(4, true); // 4 = tokenomics finalized
     }
 
     /**
-     * @notice Calculate vested tokens for an allocation
+     * @notice Calculate vested tokens for an allocation with cliff support
      */
     function _vestedAmount(TokenAllocation storage allocation) private view returns (uint256) {
+        uint256 oneMonth = 30 days;
+        
+        // Special case for DAO reserve (requires governance vote)
+        if (allocation.duration == 0) {
+            return allocation.released; // Only what has been explicitly released
+        }
+        
+        // Handle cliff period
         if (block.timestamp < allocation.startTime) {
             return 0;
-        } else if (block.timestamp >= allocation.startTime + allocation.duration) {
-            return allocation.totalAmount;
-        } else {
-            return (allocation.totalAmount * (block.timestamp - allocation.startTime)) / allocation.duration;  //This formula is used for vesting
         }
+        
+        // After full vesting period
+        if (block.timestamp >= allocation.startTime + allocation.duration) {
+            return allocation.totalAmount;
+        }
+        
+        // For staking rewards - supply halving mechanism
+        if (_isStakingRewards(allocation)) {
+            return _calculateStakingVestedAmount(allocation, oneMonth);
+        }
+        
+        // Linear vesting after cliff
+        return (allocation.totalAmount * (block.timestamp - allocation.startTime)) / allocation.duration;
+    }
+    
+    /**
+     * @notice Helper to identify staking rewards allocation
+     */
+    function _isStakingRewards(TokenAllocation storage allocation) private view returns (bool) {
+        return (allocation.totalAmount == stakingRewards.totalAmount && 
+                allocation.startTime == stakingRewards.startTime && 
+                allocation.duration == stakingRewards.duration);
+    }
+    
+    /**
+     * @notice Calculate vested amount for staking rewards with halving
+     */
+    function _calculateStakingVestedAmount(TokenAllocation storage allocation, uint256 oneMonth) private view returns (uint256) {
+        uint256 elapsed = block.timestamp - allocation.startTime;
+        uint256 halfCycle = (oneMonth * 18);
+        uint256 cycleCount = elapsed / halfCycle;
+        uint256 cycleRemainder = elapsed % halfCycle;
+        
+        uint256 releasedForCycles = 0;
+        uint256 remaining = allocation.totalAmount;
+        
+        // Calculate full cycles
+        for (uint256 i = 0; i < cycleCount; i++) {
+            uint256 cycleRelease = remaining / 2;
+            releasedForCycles += cycleRelease;
+            remaining -= cycleRelease;
+        }
+        
+        // Add partial cycle
+        if (cycleRemainder > 0) {
+            uint256 partialCycleRelease = (remaining / 2) * cycleRemainder / halfCycle;
+            releasedForCycles += partialCycleRelease;
+        }
+        
+        return releasedForCycles;
     }
 
     /**
@@ -345,30 +473,19 @@ contract MagaFox47 is ERC20, ERC20Burnable, AccessControl, Pausable, Ownable, Re
         if (beneficiary == address(0)) revert InvalidInput();
 
         // Get the correct allocation based on type
-        TokenAllocation storage allocation;
-        string memory allocationName;
-        
-        if (allocationType == 1) {
-            allocation = teamAdvisors;
-            allocationName = "TeamAdvisors";
-        } else if (allocationType == 2) {
-            allocation = developmentFund;
-            allocationName = "DevelopmentFund";
-        } else if (allocationType == 3) {
-            allocation = privateSale;
-            allocationName = "PrivateSale";
-        } else if (allocationType == 4) {
-            allocation = publicSale;
-            allocationName = "PublicSale";
-        } else if (allocationType == 5) {
-            allocation = communityRewards;
-            allocationName = "CommunityRewards";
-        } else {
-            revert InvalidInput();
+        TokenAllocation storage allocation = _getAllocationByType(allocationType);
+        string memory allocationName = _getAllocationName(allocationType);
+
+        // For DAO reserve, we don't check vesting since it's governed by DAO votes
+        if (allocationType == 9) {
+            allocation.released += amount;
+            _mint(beneficiary, amount);
+            emit TokenAction(1, allocationName, amount, beneficiary); // 1 = tokens released
+            return;
         }
 
         uint256 vested = _vestedAmount(allocation);
-        uint256 releasable = vested - allocation.released;  //Rwleaseable amount is the total vested amount minus the already released amount
+        uint256 releasable = vested - allocation.released;
 
         if (amount > releasable) revert AllocationExceeded();
 
@@ -377,14 +494,46 @@ contract MagaFox47 is ERC20, ERC20Burnable, AccessControl, Pausable, Ownable, Re
 
         emit TokenAction(1, allocationName, amount, beneficiary); // 1 = tokens released
     }
+    
+    /**
+     * @notice Helper to get allocation by type ID
+     */
+    function _getAllocationByType(uint8 allocationType) private view returns (TokenAllocation storage) {
+        if (allocationType == 1) return seed;
+        if (allocationType == 2) return privateStrategic;
+        if (allocationType == 3) return communityIDO;
+        if (allocationType == 4) return liquidityAuction;
+        if (allocationType == 5) return stakingRewards;
+        if (allocationType == 6) return liquidityMaking;
+        if (allocationType == 7) return teamAdvisors;
+        if (allocationType == 8) return growthPartnerships;
+        if (allocationType == 9) return futureDaoReserve;
+        revert InvalidInput();
+    }
+    
+    /**
+     * @notice Helper to get allocation name by type ID
+     */
+    function _getAllocationName(uint8 allocationType) private pure returns (string memory) {
+        if (allocationType == 1) return "Seed";
+        if (allocationType == 2) return "PrivateStrategic";
+        if (allocationType == 3) return "CommunityIDO";
+        if (allocationType == 4) return "LiquidityAuction";
+        if (allocationType == 5) return "StakingRewards";
+        if (allocationType == 6) return "LiquidityMaking";
+        if (allocationType == 7) return "TeamAdvisors";
+        if (allocationType == 8) return "GrowthPartnerships";
+        if (allocationType == 9) return "FutureDaoReserve";
+        revert InvalidInput();
+    }
 
 
     /**
      * @notice Execute token buyback and burn 
      */
     function executeBuyback(uint256 amount) external onlyOwner nonReentrant {
-        if (!isWalletAllocated[WalletType.TREASURY]) revert ContractState("NotAllocated");
-        address treasury = allocatedWallets[WalletType.TREASURY];
+        if (!isWalletAllocated[WalletType.CHARITY_TREASURY]) revert ContractState("NotAllocated");
+        address treasury = allocatedWallets[WalletType.CHARITY_TREASURY];
         
         // Transfer and Burn tokens to treasury
         _transfer(treasury, address(this), amount);
@@ -422,48 +571,51 @@ contract MagaFox47 is ERC20, ERC20Burnable, AccessControl, Pausable, Ownable, Re
     /**
      * @notice Override transfer to implement fees
      */
-    function _transfer(
-        address from,
-        address to,
-        uint256 amount
-    ) internal virtual override {
-        if (paused()) revert ContractState("Paused");
-        
-        // Skip fees for contract internal transfers
-        if (!transactionFeesEnabled || from == address(this) || to == address(this)) {
-            super._transfer(from, to, amount);
-            return;
-        }
-        
-        // Calculate and apply fees
-        uint256 feeAmount = (amount * transactionFeePercent) / 10000;
-        if (feeAmount == 0) {
-            super._transfer(from, to, amount);
-            return;
-        }
-        
-        // Transfer main amount
-        super._transfer(from, to, amount - feeAmount);
-        
-        // Split fees between charity and liquidity
-        uint256 charityAmount = feeAmount / 2;
-        uint256 liquidityAmount = feeAmount - charityAmount;
-        
-        // Send to charity wallet if allocated, otherwise to recipient
-        if (isWalletAllocated[WalletType.CHARITY_FUND]) {
-            super._transfer(from, allocatedWallets[WalletType.CHARITY_FUND], charityAmount);
-        } else {
-            super._transfer(from, to, charityAmount);
-            
-        }
-        
-        // Send to liquidity wallet if allocated, otherwise to recipient
-        if (isWalletAllocated[WalletType.LIQUIDITY_POOL]) {
-            super._transfer(from, allocatedWallets[WalletType.LIQUIDITY_POOL], liquidityAmount);
-        } else {
-            super._transfer(from, to, liquidityAmount);
-        }
+function _transfer(
+    address from,
+    address to,
+    uint256 amount
+) internal virtual override {
+    if (paused()) revert ContractState("Paused");
+
+    if (!transactionFeesEnabled || from == address(this) || to == address(this)) {
+        super._transfer(from, to, amount);
+        return;
     }
+
+    uint256 totalFeeAmount = (amount * 150) / 10000; // 1.5%
+    uint256 totalAmount = amount + totalFeeAmount;
+
+    // Ensure sender has enough balance for both amount and fees
+    require(balanceOf(from) >= totalAmount, "ERC20: transfer amount plus fees exceeds balance");
+
+    // Transfer full amount to recipient
+    super._transfer(from, to, amount);
+
+    // Calculate individual fees
+    uint256 burnAmount = (amount * 100) / 10000;       // 1%
+    uint256 charityAmount = (amount * 25) / 10000;     // 0.25%
+    uint256 liquidityAmount = totalFeeAmount - burnAmount - charityAmount;
+
+    // Burn 1%
+    _burn(from, burnAmount);
+
+    // Charity 0.25%
+    if (isWalletAllocated[WalletType.CHARITY_TREASURY]) {
+        super._transfer(from, allocatedWallets[WalletType.CHARITY_TREASURY], charityAmount);
+    } else {
+        super._transfer(from, to, charityAmount);
+    }
+
+    // Liquidity 0.25%
+    if (isWalletAllocated[WalletType.LIQUIDITY_MAKING]) {
+        super._transfer(from, allocatedWallets[WalletType.LIQUIDITY_MAKING], liquidityAmount);
+    } else {
+        super._transfer(from, to, liquidityAmount);
+    }
+}
+
+
 
     /**
      * @notice Override _burn function
