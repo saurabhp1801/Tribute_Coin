@@ -8,7 +8,7 @@ describe("MagaFox47", function () {
   const tokenName = "MagaFox47";
   const tokenSymbol = "MFOX";
   let initialSupply;
-  const imageURI = "https://gateway.pinata.cloud/ipfs/bafkreickhuyriahz76hvg3wxzuwbidiyg7ekx2a6cll5dl5owshtjbrrcq";
+  const imageURI = "https://gateway.pinata.cloud/ipfs/bafkreieonkqpkf26xqbyqnxpguzna6rizwndsdh4t35usjce5d5fhqc37qs";
   const newImageURI = "ipfs://QmTestNew";
 
   // Constants for roles
@@ -199,115 +199,105 @@ describe("MagaFox47", function () {
     });
   });
 
-  describe("Transferring", function () {
-    beforeEach(async function () {
-      // Enable minting and mint tokens to user1
-      await magaFox.setContractState(1, true); // 1 = Minting status
-      const mintAmount = ethers.parseUnits("1000", 18);
-      await magaFox.mint(user1.address, mintAmount, false);
-    });
-    
-    it("Should allow token transfers when not paused", async function () {
-      const transferAmount = ethers.parseUnits("300", 18);
-      await magaFox.connect(user1).transfer(user2.address, transferAmount);
-      
-      expect(await magaFox.balanceOf(user2.address)).to.equal(transferAmount);
-      const expectedBalance = ethers.parseUnits("700", 18);
-      expect(await magaFox.balanceOf(user1.address)).to.equal(expectedBalance);
-    });
-
-    it("Should not allow token transfers when paused", async function () {
-      // Pause the contract
-      await magaFox.setContractState(4, true); // 4 = Pause contract
-      
-      const transferAmount = ethers.parseUnits("300", 18);
-      await expect(
-        magaFox.connect(user1).transfer(user2.address, transferAmount)
-      ).to.be.revertedWithCustomError(magaFox, "ContractState"); // "Paused"
-    });
-    
-    it("Should apply transaction fees when enabled", async function () {
-      // Enable transaction fees
-      await magaFox.setContractState(2, true); // 2 = Transaction fees
-      
-      const transferAmount = ethers.parseUnits("1000", 18);
-      await magaFox.mint(user1.address, transferAmount, false); // Add more tokens for fees
-      
-      const initialTotalSupply = await magaFox.totalSupply();
-      const initialUser1Balance = await magaFox.balanceOf(user1.address);
-      const initialUser3Balance = await magaFox.balanceOf(user3.address);
-      const initialCharityBalance = await magaFox.balanceOf(charityAddress.address);
-      const initialLiquidityBalance = await magaFox.balanceOf(liquidityAddress.address);
-      
-      // Calculate expected fees (1.5% total)
-      const totalFeeAmount = transferAmount * 150n / 10000n; // 1.5% fee
-      const burnAmount = transferAmount * 100n / 10000n;     // 1% burn
-      const charityAmount = transferAmount * 25n / 10000n;   // 0.25% charity
-      const liquidityAmount = totalFeeAmount - burnAmount - charityAmount; // 0.25% liquidity
-      
-      // Transfer with fees
-      await magaFox.connect(user1).transfer(user3.address, transferAmount);
-      
-      // Check balances
-      // 1. User3 (recipient) should get the transfer amount minus total fees
-      expect(await magaFox.balanceOf(user3.address)).to.equal(
-        initialUser3Balance + transferAmount - totalFeeAmount
-      );
-      
-      // 2. User1 (sender) should have lost the transfer amount
-      expect(await magaFox.balanceOf(user1.address)).to.equal(
-        initialUser1Balance - transferAmount
-      );
-      
-      // 3. Charity wallet should receive its portion
-      expect(await magaFox.balanceOf(charityAddress.address)).to.equal(
-        initialCharityBalance + charityAmount
-      );
-      
-      // 4. Liquidity wallet should receive its portion
-      expect(await magaFox.balanceOf(liquidityAddress.address)).to.equal(
-        initialLiquidityBalance + liquidityAmount
-      );
-      
-      // 5. Burn amount should reduce total supply
-      expect(await magaFox.totalSupply()).to.equal(
-        initialTotalSupply - burnAmount
-      );
-    });
-    
-    it("Should update transaction fee percentage", async function () {
-      await magaFox.setContractState(2, true); // 2 = Transaction fees
-      
-      // Set fee to 2%
-      await magaFox.setTransactionFeePercent(200);
-      expect(await magaFox.transactionFeePercent()).to.equal(200);
-      
-      const transferAmount = ethers.parseUnits("1000", 18);
-      await magaFox.mint(user1.address, transferAmount, false);
-      
-      // Note: Even though we changed the transaction fee percentage, the contract's 
-      // _transfer function has hardcoded values (1.5% total), so this wouldn't affect 
-      // the actual fee calculation.
-      
-      // Transfer with the updated fee structure (but using the hardcoded values)
-      const initialUser3Balance = await magaFox.balanceOf(user3.address);
-      await magaFox.connect(user1).transfer(user3.address, transferAmount);
-      
-      // Calculate expected fees based on the hardcoded values
-      const totalFeeAmount = transferAmount * 150n / 10000n; // 1.5% fee
-      
-      // Check recipient balance
-      expect(await magaFox.balanceOf(user3.address)).to.equal(
-        initialUser3Balance + transferAmount - totalFeeAmount
-      );
-    });
-    
-    it("Should reject setting fees higher than 5%", async function () {
-      await expect(
-        magaFox.setTransactionFeePercent(600) // 6%
-      ).to.be.revertedWithCustomError(magaFox, "InvalidInput");
-    });
+describe("Transferring", function () {
+  beforeEach(async function () {
+    // Enable minting and mint tokens to user1
+    await magaFox.setContractState(1, true); // 1 = Minting status
+    const mintAmount = ethers.parseUnits("1000", 18);
+    await magaFox.mint(user1.address, mintAmount, false);
   });
+
+  it("Should allow token transfers when not paused", async function () {
+    const transferAmount = ethers.parseUnits("300", 18);
+    await magaFox.connect(user1).transfer(user2.address, transferAmount);
+
+    expect(await magaFox.balanceOf(user2.address)).to.equal(transferAmount);
+    const expectedBalance = ethers.parseUnits("700", 18);
+    expect(await magaFox.balanceOf(user1.address)).to.equal(expectedBalance);
+  });
+
+  it("Should not allow token transfers when paused", async function () {
+    await magaFox.setContractState(4, true); // 4 = Pause contract
+
+    const transferAmount = ethers.parseUnits("300", 18);
+    await expect(
+      magaFox.connect(user1).transfer(user2.address, transferAmount)
+    ).to.be.revertedWithCustomError(magaFox, "ContractState"); // "Paused"
+  });
+
+  it("Should apply transaction fees when enabled", async function () {
+    // Enable transaction fees
+    await magaFox.setContractState(2, true); // 2 = Transaction fees
+
+    const transferAmount = ethers.parseUnits("1000", 18);
+    await magaFox.mint(user1.address, transferAmount, false); // Top up user1 for fees
+
+    const initialTotalSupply = await magaFox.totalSupply();
+    const initialUser1Balance = await magaFox.balanceOf(user1.address);
+    const initialUser3Balance = await magaFox.balanceOf(user3.address);
+    const initialCharityBalance = await magaFox.balanceOf(charityAddress.address);
+    const initialLiquidityBalance = await magaFox.balanceOf(liquidityAddress.address);
+
+    // Expected fee amounts (1.5%)
+    const totalFeeAmount = transferAmount * 150n / 10000n; // 1.5%
+    const burnAmount = transferAmount * 100n / 10000n;     // 1%
+    const charityAmount = transferAmount * 25n / 10000n;   // 0.25%
+    const liquidityAmount = totalFeeAmount - burnAmount - charityAmount;
+
+    // Perform transfer
+    await magaFox.connect(user1).transfer(user3.address, transferAmount);
+
+    // 1. Recipient should get full amount (no fee cut)
+    expect(await magaFox.balanceOf(user3.address)).to.equal(
+      initialUser3Balance + transferAmount
+    );
+
+    // 2. Sender should lose amount + fees
+    expect(await magaFox.balanceOf(user1.address)).to.equal(
+      initialUser1Balance - transferAmount - totalFeeAmount
+    );
+
+    // 3. Charity wallet
+    expect(await magaFox.balanceOf(charityAddress.address)).to.equal(
+      initialCharityBalance + charityAmount
+    );
+
+    // 4. Liquidity wallet
+    expect(await magaFox.balanceOf(liquidityAddress.address)).to.equal(
+      initialLiquidityBalance + liquidityAmount
+    );
+
+    // 5. Total supply should reduce by burn amount
+    expect(await magaFox.totalSupply()).to.equal(
+      initialTotalSupply - burnAmount
+    );
+  });
+
+  it("Should update transaction fee percentage", async function () {
+    await magaFox.setContractState(2, true);
+    await magaFox.setTransactionFeePercent(200); // 2%
+    expect(await magaFox.transactionFeePercent()).to.equal(200);
+
+    const transferAmount = ethers.parseUnits("1000", 18);
+    await magaFox.mint(user1.address, transferAmount, false);
+
+    const initialUser3Balance = await magaFox.balanceOf(user3.address);
+    await magaFox.connect(user1).transfer(user3.address, transferAmount);
+
+    // Since fee logic is hardcoded to 1.5%, still expect 1.5% deduction
+    const totalFeeAmount = transferAmount * 150n / 10000n;
+    expect(await magaFox.balanceOf(user3.address)).to.equal(
+      initialUser3Balance + transferAmount
+    );
+  });
+
+  it("Should reject setting fees higher than 5%", async function () {
+    await expect(
+      magaFox.setTransactionFeePercent(600)
+    ).to.be.revertedWithCustomError(magaFox, "InvalidInput");
+  });
+});
+
 
 
   describe("Pausing", function () {
