@@ -12,7 +12,7 @@ async function main() {
   // Token parameters
   const name = "MagaFox47";
   const symbol = "MFOX";
-  const tokenImageURI = "https://bafybeigec2ma6y33riul6tk7ebhbppchqa23clwches772l5rlc5ggohpi.ipfs.nftstorage.link/";
+  const tokenImageURI = "https://bafkreieonkqpkf26xqbyqnxpguzna6rizwndsdh4t35usjce5d5fhqc37q.ipfs.dweb.link/";
 
   // 1 billion tokens with 18 decimals (same as ETH)
   const initialSupply = ethers.parseUnits("1000000000", 18);

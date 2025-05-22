@@ -8,7 +8,7 @@ describe("MagaFox47", function () {
   const tokenName = "MagaFox47";
   const tokenSymbol = "MFOX";
   let initialSupply;
-  const imageURI = "https://gateway.pinata.cloud/ipfs/bafkreieonkqpkf26xqbyqnxpguzna6rizwndsdh4t35usjce5d5fhqc37qs";
+  const imageURI = "https://bafkreieonkqpkf26xqbyqnxpguzna6rizwndsdh4t35usjce5d5fhqc37q.ipfs.dweb.link/";
   const newImageURI = "ipfs://QmTestNew";
 
   // Constants for roles
