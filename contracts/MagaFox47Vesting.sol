@@ -291,8 +291,9 @@ contract MAGAFox47Vesting is Ownable, ReentrancyGuard {
         ) revert InvalidParams();
 
         // Pre-pull total to reduce repeated transferFrom overhead
-        uint256 sum;
-        for (uint256 i; i < n; ) {
+        // uint256 sum;
+        uint256 sum = 0;
+        for (uint256 i=0; i < n; ) {
             sum += amounts[i];
             unchecked {
                 ++i;
@@ -442,6 +443,68 @@ contract MAGAFox47Vesting is Ownable, ReentrancyGuard {
 
         emit ScheduleRevoked(id, s.beneficiary, releasable, unvested);
     }
+
+//    function revoke(bytes32 id) external onlyOwner nonReentrant {
+//     Schedule storage s = _schedules[id];
+//     if (s.beneficiary == address(0)) revert ScheduleNotFound();
+//     if (s.revokedAt != 0) revert AlreadyRevoked();
+//     if ((s.flags & _F_REVOCABLE) == 0) revert NotRevocable();
+
+//     // ---- checks done; start effects
+//     uint32 t = uint32(block.timestamp);
+//     s.revokedAt = t;
+
+//     uint128 vestedAtRevoke = _vestedAmountAt(s, t);
+//     uint128 releasedSoFar  = s.released;
+//     uint128 totalAmt       = s.total;
+
+//     uint128 releasable = vestedAtRevoke > releasedSoFar
+//         ? vestedAtRevoke - releasedSoFar
+//         : 0;
+//     uint128 unvested = totalAmt > vestedAtRevoke
+//         ? totalAmt - vestedAtRevoke
+//         : 0;
+
+//     // Effects (all state writes BEFORE any external call)
+//     if (releasable > 0) {
+//         s.released = uint128(uint256(releasedSoFar) + releasable);
+//     }
+
+//     // Deduct totalLocked once by the sum (handles both branches)
+//     uint256 totalDeduct = uint256(releasable) + uint256(unvested);
+//     if (totalDeduct > 0) {
+//         totalLocked -= totalDeduct;
+//     }
+
+//     address ben = s.beneficiary;
+//     address ow  = owner();
+
+//     // ---- interactions
+//     if (releasable > 0) {
+//         token.safeTransfer(ben, releasable);
+//         emit TokensReleased(id, ben, ben, releasable);
+//     }
+//     if (unvested > 0) {
+//         token.safeTransfer(ow, unvested);
+//     }
+
+//     emit ScheduleRevoked(id, ben, releasable, unvested);
+// }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
     // ---------- Owner funding / surplus ----------
     /**
@@ -632,7 +695,9 @@ contract MAGAFox47Vesting is Ownable, ReentrancyGuard {
         // Linear vesting between start and end; optionally snap to slice boundary
         uint256 elapsed = ts - s.start;
         if (s.slice > 1) {
+            //slither suggest
             elapsed = (elapsed / s.slice) * s.slice; // floor to slice
+
         }
         // vested = total * elapsed / duration
         return uint128((uint256(s.total) * elapsed) / s.duration);
@@ -647,6 +712,8 @@ contract MAGAFox47Vesting is Ownable, ReentrancyGuard {
     //     revert("ETH_NOT_ACCEPTED");
     // }
 
+     // slither-disable-next-line locked-ether
     receive() external payable { revert EthNotAccepted(); }
+    // slither-disable-next-line locked-ether
     fallback() external payable { revert EthNotAccepted(); }
 }

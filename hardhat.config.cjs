@@ -17,7 +17,10 @@ module.exports = {
   gasReporter: {
     enabled: true,
     currency: "USD",
-    showTimeSpent: true,
+    // outputFile: "gas-report.txt", // Optional file output
+    noColors: true,
+    showMethodSig: true,     // Shows function signatures
+    showTimeSpent: true,   
   },
   networks: {
     hardhat: {},

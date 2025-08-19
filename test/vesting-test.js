@@ -21,6 +21,16 @@ const zeros10 = () => new Array(10).fill(ethers.ZeroAddress);
 async function deployFixture() {
   const [owner, alice, bob, carol, treasury, stranger] =
     await ethers.getSigners();
+    console.log("Deploying with:", owner.address);
+    console.log("Owner:", owner.address);
+    console.log("alice", alice.address);
+    console.log("bob", bob.address);
+    console.log("carol", carol.address);
+    console.log("treasury", treasury.address);
+    console.log("stranger", stranger.address);
+    console.log("Other signers:", alice.address, bob.address, carol.address, treasury.address, stranger.address);
+    
+    
 
   // Deploy your real token
   const Token = await ethers.getContractFactory("MagaFox47"); // <- exact name from your contract
@@ -214,7 +224,9 @@ describe("MAGAFox47Vesting", function () {
     it("creates schedule, pulls tokens, updates indexes & emits", async () => {
       const { owner, alice, token, vesting } = await loadFixture(deployFixture);
 
+      //converts 1000 tokens to wei (smallest unit)
       const amount = toWad(1_000);
+      //MagaFox47  needs prior approval → This line gives vesting contract permission to spend 1000 tokens from owner.
       await token.approve(await vesting.getAddress(), amount);
 
       const now = await time.latest();

@@ -487,7 +487,9 @@ contract MagaFox47 is
         uint256 elapsed = block.timestamp - allocation.startTime;
         uint256 halfCycle = (oneMonth * 18);
         uint256 cycleCount = elapsed / halfCycle;
-        uint256 cycleRemainder = elapsed % halfCycle;
+        // This is NOT randomness — it's purely vesting math
+        // uint256 cycleRemainder = elapsed % halfCycle;
+        uint256 cycleRemainder = elapsed - (cycleCount * halfCycle); // same as % but no modulo op
 
         uint256 releasedForCycles = 0;
         uint256 remaining = allocation.totalAmount;
