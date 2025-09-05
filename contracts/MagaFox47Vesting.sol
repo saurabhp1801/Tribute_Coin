@@ -5,7 +5,7 @@ pragma solidity ^0.8.19;
 
 /**
  * MAGAFox47 Vesting
- * - Dedicated to a single ERC20 token (immutable at deployment)
+ * - Dedicated to a MAGAFOX47 token (immutable at deployment)
  * - Linear vesting with cliff and optional slice granularity
  * - Optional revocation by owner (returns unvested to owner, sends vested remainder to beneficiary)
  * - Batch creation, nonReentrant token flows, SafeERC20, surplus accounting
@@ -172,8 +172,8 @@ contract MAGAFox47Vesting is Ownable, ReentrancyGuard {
         // uint32 revokedAt; // 4  (timestamp when revoked; 0 if active)
         // bool revocable; // 1
         // bool revoked; // 1
-         uint32 revokedAt;   // 0 => active; >0 => revoked at that timestamp
-         uint8  flags; 
+        uint32 revokedAt; // 0 => active; >0 => revoked at that timestamp
+        uint8 flags;
         // remaining bytes unused in slot 2 (kept simple for clarity)
     }
     uint8 private constant _F_REVOCABLE = 1 << 0;
@@ -218,42 +218,49 @@ contract MAGAFox47Vesting is Ownable, ReentrancyGuard {
 
     // ---------- Create schedules ----------
     /**
+     * @notice Creates a new token vesting/lock schedule for a beneficiary.
      * @notice Create a vesting schedule and pull tokens from msg.sender.
      * @dev Requires prior token approval on this contract for `amount`.
      */
+
+// for exm-> alice get 1000 magafox token over 6 month with i month cliff
     function lock(
-        address beneficiary,
+        address beneficiary, 
         uint128 amount,
-        uint32 start,
-        uint32 cliff,
-        uint32 duration,
-        uint32 slice,
+        uint32 start,    //1 sept
+        uint32 cliff,    // 1 month
+        uint32 duration,  //total vesting peiod 6 month
+        uint32 slice,    //how often token relese exm every 30 days
         bool revocable
-    ) external onlyOwner nonReentrant returns (bytes32 id) {
+    ) external  nonReentrant returns (bytes32 id) {
+        // Validate input parameters to avoid invalid schedules
         _validateParams(beneficiary, amount, start, cliff, duration, slice);
 
         // Pull funds first (effects after checks; still safe due to nonReentrant and dedicated token)
+        //  Transfer tokens from the caller (owner) to this contract
         token.safeTransferFrom(msg.sender, address(this), amount);
 
+        //  Generate a new unique ID for this vesting schedule
         id = _newId(beneficiary, start, amount);
+         //  Create a new Schedule struct in storage
         Schedule storage s = _schedules[id];
 
-        s.beneficiary = beneficiary;
-        s.start = start;
-        s.cliff = cliff;
-        s.duration = duration;
-        s.total = amount;
-        // s.released = 0;
-        s.slice = slice;
-        // s.revocable = revocable;
-        // s.revoked = false;
-        // s.revokedAt = 0;
-        s.flags       = revocable ? _F_REVOCABLE : 0;
+        //populate the schedule details
+        s.beneficiary = beneficiary;         // Address who will receive vested tokens
+        s.start = start;                     // Vesting start timestamp
+        s.cliff = cliff;                     //Cliff duration (time until first release)
+        s.duration = duration;               //Total vesting length
+        s.total = amount;                     // Total tokens locked for this schedule
+        s.slice = slice;                      // Interval for linear vesting (time-based)
+        s.flags = revocable ? _F_REVOCABLE : 0; // Store revocable flag if applicable
         // revokedAt defaults to 0
 
         totalLocked += amount;
+
+        // Track this schedule ID under the beneficiary’s list
         _beneficiarySchedules[beneficiary].push(id);
 
+        //Emit event for  tracking 
         emit ScheduleCreated(
             id,
             beneficiary,
@@ -265,6 +272,7 @@ contract MAGAFox47Vesting is Ownable, ReentrancyGuard {
             revocable
         );
     }
+
 
     /**
      * @notice Batch create schedules (saves gas vs multiple single calls).
@@ -293,7 +301,7 @@ contract MAGAFox47Vesting is Ownable, ReentrancyGuard {
         // Pre-pull total to reduce repeated transferFrom overhead
         // uint256 sum;
         uint256 sum = 0;
-        for (uint256 i=0; i < n; ) {
+        for (uint256 i = 0; i < n; ) {
             sum += amounts[i];
             unchecked {
                 ++i;
@@ -323,13 +331,8 @@ contract MAGAFox47Vesting is Ownable, ReentrancyGuard {
             s.cliff = cf;
             s.duration = du;
             s.total = a;
-           // s.released defaults to 0
             s.slice = sl;
-            // s.revocable = rv;
-            // s.revoked = false;
-            // s.revokedAt = 0;
-             s.flags       = rv ? _F_REVOCABLE : uint8(0);
-            // s.revokedAt defaults to 0
+            s.flags = rv ? _F_REVOCABLE : uint8(0);
             totalLocked += a;
             _beneficiarySchedules[b].push(id);
 
@@ -345,93 +348,62 @@ contract MAGAFox47Vesting is Ownable, ReentrancyGuard {
      * @notice Releases currently releasable tokens to `to` (or to beneficiary if `to==0`).
      *         Callable by the beneficiary or the owner.
      */
-    // function release(bytes32 id, address to) external nonReentrant {
-    //     Schedule storage s = _schedules[id];
-    //     if (s.beneficiary == address(0)) revert ScheduleNotFound();
-    //     // if (msg.sender != s.beneficiary && msg.sender != owner())
-    //      address ben = s.beneficiary;
-    //    if (msg.sender != ben && msg.sender != owner()) revert NotAuthorized();
-
-    //         revert NotAuthorized();
-
-    //     uint128 releasable = _releasableNow(s);
-    //     if (releasable == 0) revert NothingToRelease();
-
-    //     // s.released += releasable;
-    //     s.released = uint128(uint256(s.released) + releasable);
-    //     totalLocked -= releasable;
-
-    //     // address recipient = (to == address(0)) ? s.beneficiary : to;
-    //      address recipient = (to == address(0)) ? ben : to;
-    //     token.safeTransfer(recipient, releasable);
-    //     // emit TokensReleased(id, s.beneficiary, recipient, releasable);
-    //     emit TokensReleased(id, ben, recipient, releasable);
-    // }
-
+  
     function release(bytes32 id, address to) external nonReentrant {
-    Schedule storage s = _schedules[id];
-    if (s.beneficiary == address(0)) revert ScheduleNotFound();
+        Schedule storage s = _schedules[id];
+        if (s.beneficiary == address(0)) revert ScheduleNotFound();
 
-    // 1) enforce authorization first (test expects NotAuthorized even if nothing vested)
-    address ben = s.beneficiary;
-    if (msg.sender != ben && msg.sender != owner()) revert NotAuthorized();
+        // 1) enforce authorization first (test expects NotAuthorized even if nothing vested)
+        address ben = s.beneficiary;
+        if (msg.sender != ben && msg.sender != owner()) revert NotAuthorized();
 
-    // 2) then compute/revert if nothing to release
-    uint128 releasable = _releasableNow(s);
-    if (releasable == 0) revert NothingToRelease();
+        // 2) then compute/revert if nothing to release
+        uint128 releasable = _releasableNow(s);
+        if (releasable == 0) revert NothingToRelease();
 
-    // 3) commit once
-    s.released = uint128(uint256(s.released) + releasable);
-    totalLocked -= releasable;
+        // 3) commit once
+        s.released = uint128(uint256(s.released) + releasable);
+        totalLocked -= releasable;
 
-    // 4) transfer & emit
-    address recipient = (to == address(0)) ? ben : to;
-    token.safeTransfer(recipient, releasable);
-    emit TokensReleased(id, ben, recipient, releasable);
-}
-
+        // 4) transfer & emit
+        address recipient = (to == address(0)) ? ben : to;
+        token.safeTransfer(recipient, releasable);
+        emit TokensReleased(id, ben, recipient, releasable);
+    }
 
     /**
      * @notice Revoke a revocable schedule. Sends vested tokens (if any) to the beneficiary,
      *         and returns the unvested remainder to the owner.
      */
+
     function revoke(bytes32 id) external onlyOwner nonReentrant {
         Schedule storage s = _schedules[id];
         if (s.beneficiary == address(0)) revert ScheduleNotFound();
-        // if (s.revoked) revert AlreadyRevoked();
-        // if (!s.revocable) revert NotRevocable();
         if (s.revokedAt != 0) revert AlreadyRevoked();
         if ((s.flags & _F_REVOCABLE) == 0) revert NotRevocable();
 
-        // Fix the revocation time
-        // s.revoked = true;
-        // s.revokedAt = uint32(block.timestamp);
-        uint32 t = uint32(block.timestamp);
-         s.revokedAt = t;
 
-        // Compute vested/unvested at revoke time
-        // uint128 vestedAtRevoke = _vestedAmountAt(s, s.revokedAt);
-        // uint128 releasable = vestedAtRevoke > s.released
-            // ? vestedAtRevoke - s.released
-            // : 0;
-        // uint128 unvested = s.total > vestedAtRevoke
-            // ? s.total - vestedAtRevoke
-            // : 0;
-            uint128 vestedAtRevoke = _vestedAmountAt(s, t);
-        uint128 releasedSoFar  = s.released;
-       uint128 totalAmt       = s.total;
-     uint128 releasable     = vestedAtRevoke > releasedSoFar ? vestedAtRevoke - releasedSoFar : 0;
-      uint128 unvested       = totalAmt > vestedAtRevoke ? totalAmt - vestedAtRevoke : 0;
+        uint32 t = uint32(block.timestamp);
+        s.revokedAt = t;
+
+        uint128 vestedAtRevoke = _vestedAmountAt(s, t);
+        uint128 releasedSoFar = s.released;
+        uint128 totalAmt = s.total;
+        uint128 releasable = vestedAtRevoke > releasedSoFar
+            ? vestedAtRevoke - releasedSoFar
+            : 0;
+        uint128 unvested = totalAmt > vestedAtRevoke
+            ? totalAmt - vestedAtRevoke
+            : 0;
 
         // Pay vested to beneficiary if any
         if (releasable > 0) {
-            // s.released += releasable;
-             s.released = uint128(uint256(releasedSoFar) + releasable);
+        
+            s.released = uint128(uint256(releasedSoFar) + releasable);
             totalLocked -= releasable;
-            // token.safeTransfer(s.beneficiary, releasable);
-            // emit TokensReleased(id, s.beneficiary, s.beneficiary, releasable);
-             address ben = s.beneficiary;
-             token.safeTransfer(ben, releasable);
+    
+            address ben = s.beneficiary;
+            token.safeTransfer(ben, releasable);
             emit TokensReleased(id, ben, ben, releasable);
         }
 
@@ -444,67 +416,7 @@ contract MAGAFox47Vesting is Ownable, ReentrancyGuard {
         emit ScheduleRevoked(id, s.beneficiary, releasable, unvested);
     }
 
-//    function revoke(bytes32 id) external onlyOwner nonReentrant {
-//     Schedule storage s = _schedules[id];
-//     if (s.beneficiary == address(0)) revert ScheduleNotFound();
-//     if (s.revokedAt != 0) revert AlreadyRevoked();
-//     if ((s.flags & _F_REVOCABLE) == 0) revert NotRevocable();
-
-//     // ---- checks done; start effects
-//     uint32 t = uint32(block.timestamp);
-//     s.revokedAt = t;
-
-//     uint128 vestedAtRevoke = _vestedAmountAt(s, t);
-//     uint128 releasedSoFar  = s.released;
-//     uint128 totalAmt       = s.total;
-
-//     uint128 releasable = vestedAtRevoke > releasedSoFar
-//         ? vestedAtRevoke - releasedSoFar
-//         : 0;
-//     uint128 unvested = totalAmt > vestedAtRevoke
-//         ? totalAmt - vestedAtRevoke
-//         : 0;
-
-//     // Effects (all state writes BEFORE any external call)
-//     if (releasable > 0) {
-//         s.released = uint128(uint256(releasedSoFar) + releasable);
-//     }
-
-//     // Deduct totalLocked once by the sum (handles both branches)
-//     uint256 totalDeduct = uint256(releasable) + uint256(unvested);
-//     if (totalDeduct > 0) {
-//         totalLocked -= totalDeduct;
-//     }
-
-//     address ben = s.beneficiary;
-//     address ow  = owner();
-
-//     // ---- interactions
-//     if (releasable > 0) {
-//         token.safeTransfer(ben, releasable);
-//         emit TokensReleased(id, ben, ben, releasable);
-//     }
-//     if (unvested > 0) {
-//         token.safeTransfer(ow, unvested);
-//     }
-
-//     emit ScheduleRevoked(id, ben, releasable, unvested);
-// }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+   
 
     // ---------- Owner funding / surplus ----------
     /**
@@ -522,6 +434,7 @@ contract MAGAFox47Vesting is Ownable, ReentrancyGuard {
      */
     error ExceedsSurplus();
     error EthNotAccepted();
+
     function withdrawSurplus(
         address to,
         uint256 amount
@@ -576,16 +489,12 @@ contract MAGAFox47Vesting is Ownable, ReentrancyGuard {
             s.cliff,
             s.duration,
             s.slice,
-            // s.revocable,
-            // s.revoked,
-            // s.revokedAt,
-            // s.total,
-            // s.released
-              (s.flags & _F_REVOCABLE) != 0,
-              s.revokedAt != 0,
-               s.revokedAt,
-            s.total, s.released
-
+    
+            (s.flags & _F_REVOCABLE) != 0,
+            s.revokedAt != 0,
+            s.revokedAt,
+            s.total,
+            s.released
         );
     }
 
@@ -621,8 +530,8 @@ contract MAGAFox47Vesting is Ownable, ReentrancyGuard {
     ) external view returns (uint256 sum) {
         bytes32[] storage arr = _beneficiarySchedules[beneficiary];
         // for (uint256 i; i < arr.length; ) {
-         uint256 len = arr.length;
-         for (uint256 i; i < len; ) {
+        uint256 len = arr.length;
+        for (uint256 i; i < len; ) {
             Schedule storage s = _schedules[arr[i]];
             sum += _releasableNow(s);
             unchecked {
@@ -664,7 +573,6 @@ contract MAGAFox47Vesting is Ownable, ReentrancyGuard {
         if (amount == 0 || duration == 0) revert InvalidParams();
         if (cliff > duration) revert InvalidParams();
         if (slice == 0 || slice > duration) revert InvalidParams();
-        // optional: enforce that start is not too far in the past/future (omitted)
     }
 
     function _releasableNow(Schedule storage s) private view returns (uint128) {
@@ -674,12 +582,11 @@ contract MAGAFox47Vesting is Ownable, ReentrancyGuard {
                 : block.timestamp
         );
         // if (s.revoked && ts > s.revokedAt) ts = s.revokedAt;
-        // If revoked, cap the timestamp at revoke time
-    if (s.revokedAt != 0 && ts > s.revokedAt) ts = s.revokedAt;
+        if (s.revokedAt != 0 && ts > s.revokedAt) ts = s.revokedAt;
         uint128 vested = _vestedAmountAt(s, ts);
-          uint128 rel = s.released;
-    return vested > rel ? vested - rel : 0;
-        // return vested > s.released ? vested - s.released : 0;
+        uint128 rel = s.released;
+        return vested > rel ? vested - rel : 0;
+        
     }
 
     function _vestedAmountAt(
@@ -697,23 +604,20 @@ contract MAGAFox47Vesting is Ownable, ReentrancyGuard {
         if (s.slice > 1) {
             //slither suggest
             elapsed = (elapsed / s.slice) * s.slice; // floor to slice
-
         }
         // vested = total * elapsed / duration
         return uint128((uint256(s.total) * elapsed) / s.duration);
     }
 
     // ---------- Receive / Fallback ----------
-    // receive() external payable {
-    //     revert("ETH_NOT_ACCEPTED");
-    // }
 
-    // fallback() external payable {
-    //     revert("ETH_NOT_ACCEPTED");
-    // }
-
-     // slither-disable-next-line locked-ether
-    receive() external payable { revert EthNotAccepted(); }
     // slither-disable-next-line locked-ether
-    fallback() external payable { revert EthNotAccepted(); }
+    receive() external payable {
+        revert EthNotAccepted();
+    }
+
+    // slither-disable-next-line locked-ether
+    fallback() external payable {
+        revert EthNotAccepted();
+    }
 }

@@ -689,7 +689,6 @@ describe("MAGAFox47Vesting", function () {
       // owner got unvested back
       const unvested = amount - vested;
       expect(balAfterOwner - balBeforeOwner).to.equal(unvested);
-
       // alice got vested remainder
       expect(balAfterAlice - balBeforeAlice).to.equal(vested);
 
@@ -936,7 +935,7 @@ describe("MAGAFox47Vesting", function () {
         await expect(vesting.connect(alice).release(ids[0], ethers.ZeroAddress)).to.not.be.reverted;
         await expect(vesting.release(ids[1], ethers.ZeroAddress)).to.not.be.reverted;
 
-        const sA = await vesting.getSchedule(ids[0]);
+        const sA = await vesting.getSchedule(ids[0]); 
         const sB = await vesting.getSchedule(ids[1]);
         expect(sA.released).to.equal(toWad(3000));
         expect(sB.released).to.equal(toWad(1500));
