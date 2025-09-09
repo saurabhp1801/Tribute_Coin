@@ -157,6 +157,10 @@ contract MAGAFox47Vesting is Ownable, ReentrancyGuard {
     IERC20 public immutable token; // dedicated ERC20 (MAGAFox47)
     uint256 public totalLocked; // tracks (sum of schedule.total - schedule.released) across all active schedules
 
+// ---------- Whitelist ----------
+    bool public whitelistEnabled;
+    mapping(address => bool) public whitelisted;
+
     // ---------- Schedule storage ----------
     struct Schedule {
         // slot 0 (32 bytes)
@@ -209,11 +213,13 @@ contract MAGAFox47Vesting is Ownable, ReentrancyGuard {
     );
     event SurplusWithdrawn(address indexed to, uint256 amount);
     event Funded(address indexed from, uint256 amount);
+    event WhitelistUpdated(address indexed user, bool status);
 
     // ---------- Constructor ----------
     constructor(address tokenAddress) {
         if (tokenAddress == address(0)) revert ZeroAddress();
         token = IERC20(tokenAddress);
+        whitelistEnabled = false; // whitelist is off by default
     }
 
     // ---------- Create schedules ----------
@@ -233,6 +239,7 @@ contract MAGAFox47Vesting is Ownable, ReentrancyGuard {
         uint32 slice,    //how often token relese exm every 30 days
         bool revocable
     ) external  nonReentrant returns (bytes32 id) {
+         if (whitelistEnabled && !whitelisted[beneficiary]) revert NotAuthorized();
         // Validate input parameters to avoid invalid schedules
         _validateParams(beneficiary, amount, start, cliff, duration, slice);
 
@@ -319,6 +326,7 @@ contract MAGAFox47Vesting is Ownable, ReentrancyGuard {
             uint32 du = durations[i];
             uint32 sl = slices[i];
             bool rv = revocables[i];
+            if (whitelistEnabled && !whitelisted[b]) revert NotAuthorized();
 
             _validateParams(b, a, st, cf, du, sl);
 
@@ -426,6 +434,24 @@ contract MAGAFox47Vesting is Ownable, ReentrancyGuard {
         if (amount == 0) revert InvalidParams();
         token.safeTransferFrom(msg.sender, address(this), amount);
         emit Funded(msg.sender, amount);
+    }
+
+  function setWhitelistEnabled(bool enabled) external onlyOwner {
+        whitelistEnabled = enabled;
+    }
+
+    function addToWhitelist(address[] calldata users) external onlyOwner {
+        for (uint256 i = 0; i < users.length; i++) {
+            whitelisted[users[i]] = true;
+            emit WhitelistUpdated(users[i], true); // emit event
+        }
+    }
+
+    function removeFromWhitelist(address[] calldata users) external onlyOwner {
+        for (uint256 i = 0; i < users.length; i++) {
+            whitelisted[users[i]] = false;
+             emit WhitelistUpdated(users[i], false); // emit event
+        }
     }
 
     /**
@@ -621,3 +647,7 @@ contract MAGAFox47Vesting is Ownable, ReentrancyGuard {
         revert EthNotAccepted();
     }
 }
+
+
+
+

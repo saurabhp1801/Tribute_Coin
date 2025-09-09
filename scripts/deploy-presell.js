@@ -280,71 +280,163 @@
 // });
 
 
-import pkg from "hardhat";
-const { ethers } = pkg;
+// import pkg from "hardhat";
+// const { ethers } = pkg;
+
+// const zeros10 = () => new Array(10).fill(ethers.ZeroAddress);
+// const toWad = (n) => ethers.parseUnits(String(n), 18);
+
+// async function main() {
+//   const [deployer] = await ethers.getSigners(); // ✅ only one signer on Sepolia
+//   console.log("Deploying contracts with:", deployer.address);
+
+//   // 1. Deploy token
+//   const Token = await ethers.getContractFactory("MagaFox47");
+//   const token = await Token.deploy(
+//     "MagaFox47",
+//     "MF47",
+//     toWad(1_000_000_000),
+//     "https://bafkreieonkqpkf26xqbyqnxpguzna6rizwndsdh4t35usjce5d5fhqc37q.ipfs.dweb.link/",
+//     zeros10()
+//   );
+//   await token.waitForDeployment();
+//   console.log("MagaFox Token deployed at:", await token.getAddress());
+
+//   // Enable minting & mint supply
+//   await (await token.setContractState(1, true)).wait();
+//   await (await token.mintWithoutRestriction(deployer.address, toWad(1_000_000_000))).wait();
+
+//   // 2. Deploy vesting
+//   const Vesting = await ethers.getContractFactory("MAGAFox47Vesting");
+//   const vesting = await Vesting.deploy(await token.getAddress());
+//   await vesting.waitForDeployment();
+//   console.log("Vesting deployed at:", await vesting.getAddress());
+
+//   // 3. Vesting template
+//   const vt = { startDelay: 0, cliff: 0, duration: 3600, slice: 60, revocable: false };
+
+//   // 4. Deploy presale
+//   const PreSell = await ethers.getContractFactory("PreSellMagaFox");
+//   const presale = await PreSell.deploy(
+//     await token.getAddress(),
+//     await vesting.getAddress(),
+//     deployer.address, // ✅ use deployer as treasury
+//     ethers.parseEther("0.001"),
+//     Math.floor(Date.now() / 1000) + 60,
+//     Math.floor(Date.now() / 1000) + 86400,
+//     ethers.parseEther("10"),
+//     ethers.parseEther("0.01"),
+//     ethers.parseEther("5"),
+//     vt
+//   );
+//   await presale.waitForDeployment();
+//   console.log("Presale deployed at:", await presale.getAddress());
+
+//   // 5. Fund presale
+//   const tokensForSale = ethers.parseEther("1000000");
+//   await token.transfer(await presale.getAddress(), tokensForSale);
+//   console.log("✅ Presale funded with tokens:", tokensForSale.toString());
+
+//   // 6. Approve vesting
+//   await presale.approveVesting(tokensForSale);
+//   console.log("✅ Vesting approved to spend presale tokens");
+
+//   console.log("🎉 Deployment finished successfully");
+// }
+
+// main().catch((error) => {
+//   console.error(error);
+//   process.exitCode = 1;
+// });
+
+
+
+import hre from "hardhat";
+const { ethers } = hre;
 
 const zeros10 = () => new Array(10).fill(ethers.ZeroAddress);
 const toWad = (n) => ethers.parseUnits(String(n), 18);
 
 async function main() {
-  const [deployer] = await ethers.getSigners(); // ✅ only one signer on Sepolia
-  console.log("Deploying contracts with:", deployer.address);
+  const [deployer] = await ethers.getSigners();
+  console.log("🚀 Deploying contracts with:", deployer.address);
 
-  // 1. Deploy token
+  // 1) Deploy MAGAFox token
   const Token = await ethers.getContractFactory("MagaFox47");
   const token = await Token.deploy(
     "MagaFox47",
     "MF47",
-    toWad(1_000_000_000),
+    toWad(1_000_000_000), // 1B tokens (tokenomics amount)
     "https://bafkreieonkqpkf26xqbyqnxpguzna6rizwndsdh4t35usjce5d5fhqc37q.ipfs.dweb.link/",
     zeros10()
   );
   await token.waitForDeployment();
-  console.log("MagaFox Token deployed at:", await token.getAddress());
+  console.log("✅ MagaFox Token:", await token.getAddress());
 
-  // Enable minting & mint supply
+  // Enable minting & mint supply to deployer (if needed by your token)
   await (await token.setContractState(1, true)).wait();
   await (await token.mintWithoutRestriction(deployer.address, toWad(1_000_000_000))).wait();
 
-  // 2. Deploy vesting
+  // 2) Deploy Vesting contract (real vesting)
   const Vesting = await ethers.getContractFactory("MAGAFox47Vesting");
   const vesting = await Vesting.deploy(await token.getAddress());
   await vesting.waitForDeployment();
-  console.log("Vesting deployed at:", await vesting.getAddress());
+  console.log("✅ Vesting:", await vesting.getAddress());
 
-  // 3. Vesting template
-  const vt = { startDelay: 0, cliff: 0, duration: 3600, slice: 60, revocable: false };
+  // 3) Prepare Presale constructor args
+  // NOTE: `ratePerEth` is "tokens per ETH" scaled to 1e18.
+  // If you want 100 tokens per ETH -> rate = 100 * 1e18
+  const tokensPerEth = 100n; // change as needed
+  const ratePerEth = ethers.parseUnits(String(tokensPerEth), 18); // 100 * 1e18
 
-  // 4. Deploy presale
-  const PreSell = await ethers.getContractFactory("PreSellMagaFox");
-  const presale = await PreSell.deploy(
-    await token.getAddress(),
-    await vesting.getAddress(),
-    deployer.address, // ✅ use deployer as treasury
-    ethers.parseEther("0.001"),
-    Math.floor(Date.now() / 1000) + 60,
-    Math.floor(Date.now() / 1000) + 86400,
-    ethers.parseEther("10"),
-    ethers.parseEther("0.01"),
-    ethers.parseEther("5"),
-    vt
+  const now = Math.floor(Date.now() / 1000);
+  const saleStart = now + 60;          // start in 60s
+  const saleEnd = now + 86400;         // end after 24h
+  const hardCapTokens = toWad(10_000); // hard cap in token units (18-decimal)
+  const minPerW = toWad(0);            // min per wallet
+  const maxPerW = toWad(0);            // max per wallet (0 = no per-wallet cap)
+
+  // VestingTemplate must be passed as a tuple/array to match the struct:
+  // VestingTemplate { uint32 startDelay; uint32 cliff; uint32 duration; uint32 slice; bool revocable; }
+  const vt_tuple = [
+    0,      // startDelay seconds
+    0,      // cliff seconds
+    3600,   // duration seconds
+    60,     // slice seconds
+    false   // revocable
+  ];
+
+  // 4) Deploy Presale (match the constructor signature exactly)
+  const Presale = await ethers.getContractFactory("PreSellMagaFox");
+  const presale = await Presale.deploy(
+    await token.getAddress(),    // tokenAddr
+    await vesting.getAddress(),  // vestingAddr
+    ratePerEth,                  // ratePerEth (tokens per ETH, scaled by 1e18)
+    saleStart,                   // startTs
+    saleEnd,                     // endTs
+    hardCapTokens,               // hardCapTokens (token units)
+    minPerW,                     // minPerW
+    maxPerW,                     // maxPerW
+    vt_tuple                     // VestingTemplate tuple
   );
   await presale.waitForDeployment();
-  console.log("Presale deployed at:", await presale.getAddress());
+  console.log("✅ Presale:", await presale.getAddress());
 
-  // 5. Fund presale
-  const tokensForSale = ethers.parseEther("1000000");
-  await token.transfer(await presale.getAddress(), tokensForSale);
-  console.log("✅ Presale funded with tokens:", tokensForSale.toString());
+  // 5) Fund Presale (transfer tokens to presale contract so it can lock to vesting)
+  const tokensForSale = toWad(1_000_000); // 1,000,000 tokens for sale
+  await (await token.transfer(await presale.getAddress(), tokensForSale)).wait();
+  console.log("✅ Presale funded:", tokensForSale.toString());
 
-  // 6. Approve vesting
-  await presale.approveVesting(tokensForSale);
-  console.log("✅ Vesting approved to spend presale tokens");
+  // 6) Approve vesting from presale to allow vesting to pull tokens
+  // presale.approveVesting will safeIncreaseAllowance(vesting, amount)
+  await (await presale.approveVesting(tokensForSale)).wait();
+  console.log("✅ Vesting allowance set from Presale to Vesting:", tokensForSale.toString());
 
-  console.log("🎉 Deployment finished successfully");
+  console.log("🎉 Deployment complete");
 }
 
-main().catch((error) => {
-  console.error(error);
+main().catch((err) => {
+  console.error(err);
   process.exitCode = 1;
 });
+

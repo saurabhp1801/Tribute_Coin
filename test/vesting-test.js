@@ -1,5 +1,3 @@
-
-
 import { expect } from "chai";
 import pkg from "hardhat";
 const { ethers } = pkg;
@@ -21,23 +19,29 @@ const zeros10 = () => new Array(10).fill(ethers.ZeroAddress);
 async function deployFixture() {
   const [owner, alice, bob, carol, treasury, stranger] =
     await ethers.getSigners();
-    console.log("Deploying with:", owner.address);
-    console.log("Owner:", owner.address);
-    console.log("alice", alice.address);
-    console.log("bob", bob.address);
-    console.log("carol", carol.address);
-    console.log("treasury", treasury.address);
-    console.log("stranger", stranger.address);
-    console.log("Other signers:", alice.address, bob.address, carol.address, treasury.address, stranger.address);
-    
-    
+  console.log("Deploying with:", owner.address);
+  console.log("Owner:", owner.address);
+  console.log("alice", alice.address);
+  console.log("bob", bob.address);
+  console.log("carol", carol.address);
+  console.log("treasury", treasury.address);
+  console.log("stranger", stranger.address);
+  console.log(
+    "Other signers:",
+    alice.address,
+    bob.address,
+    carol.address,
+    treasury.address,
+    stranger.address
+  );
 
   // Deploy your real token
   const Token = await ethers.getContractFactory("MagaFox47"); // <- exact name from your contract
   const name = "MagaFox47";
   const symbol = "MF47";
   const initialSupplyForTokenomics = toWad(1_000_000_000); // used for tokenomics math only
-  const imageURI = "https://bafkreieonkqpkf26xqbyqnxpguzna6rizwndsdh4t35usjce5d5fhqc37q.ipfs.dweb.link/";
+  const imageURI =
+    "https://bafkreieonkqpkf26xqbyqnxpguzna6rizwndsdh4t35usjce5d5fhqc37q.ipfs.dweb.link/";
   const initialWallets = zeros10();
 
   const token = await Token.deploy(
@@ -80,13 +84,7 @@ function expectedVested(
     SL = BigInt(slice);
   const end = S + D;
 
-
-/// here
-
-
-
-
-
+  /// here
 
   // cap at revoke time if provided
   if (revokedAt && BigInt(revokedAt) < ts) ts = BigInt(revokedAt);
@@ -98,8 +96,6 @@ function expectedVested(
   if (SL > 1n) elapsed = (elapsed / SL) * SL;
 
   return (total * elapsed) / D;
-
-
 }
 
 // helper that reuses an existing deployment context
@@ -749,8 +745,8 @@ describe("MAGAFox47Vesting", function () {
       // ).to.be.revertedWith("Exceeds surplus");
 
       await expect(
-  vesting.withdrawSurplus(treasury.address, toWad(60))
-).to.be.revertedWithCustomError(vesting, "ExceedsSurplus");
+        vesting.withdrawSurplus(treasury.address, toWad(60))
+      ).to.be.revertedWithCustomError(vesting, "ExceedsSurplus");
 
       await expect(vesting.withdrawSurplus(treasury.address, toWad(50)))
         .to.emit(vesting, "SurplusWithdrawn")
@@ -850,95 +846,224 @@ describe("MAGAFox47Vesting", function () {
     });
   });
 
-    describe("views & not-found", () => {
-      it("vestedAmount/releasable follow time and cap at revoke", async () => {
-        const { alice } = await loadFixture(deployFixture);
-        const amount = toWad(1000);
-        const cliff = 100, duration = 1000, slice = 25;
-        const { id, start, vesting } = await createVestingFor(alice.address, amount, { cliff, duration, slice, revocable: true });
+  describe("views & not-found", () => {
+    it("vestedAmount/releasable follow time and cap at revoke", async () => {
+      const { alice } = await loadFixture(deployFixture);
+      const amount = toWad(1000);
+      const cliff = 100,
+        duration = 1000,
+        slice = 25;
+      const { id, start, vesting } = await createVestingFor(
+        alice.address,
+        amount,
+        { cliff, duration, slice, revocable: true }
+      );
 
-        await jumpTo(start + 500);
-        const v500 = await vesting.vestedAmount(id, start + 500);
-        expect(v500).to.equal(expectedVested(amount, start, cliff, duration, slice, start + 500));
+      await jumpTo(start + 500);
+      const v500 = await vesting.vestedAmount(id, start + 500);
+      expect(v500).to.equal(
+        expectedVested(amount, start, cliff, duration, slice, start + 500)
+      );
 
-        await vesting.revoke(id);
-        const s = await vesting.getSchedule(id);
+      await vesting.revoke(id);
+      const s = await vesting.getSchedule(id);
 
-        // past revoke => cap at revokedAt
-        const v900 = await vesting.vestedAmount(id, start + 900);
-        expect(v900).to.equal(expectedVested(amount, start, cliff, duration, slice, start + 900, s.revokedAt));
-      });
-
-      it("ScheduleNotFound on unknown id", async () => {
-        const { vesting } = await loadFixture(deployFixture);
-        const fake = ethers.id("nope");
-        await expect(vesting.getSchedule(fake)).to.be.revertedWithCustomError(vesting, "ScheduleNotFound");
-        await expect(vesting.releasableAmount(fake)).to.be.revertedWithCustomError(vesting, "ScheduleNotFound");
-        await expect(vesting.vestedAmount(fake, 0)).to.be.revertedWithCustomError(vesting, "ScheduleNotFound");
-      });
+      // past revoke => cap at revokedAt
+      const v900 = await vesting.vestedAmount(id, start + 900);
+      expect(v900).to.equal(
+        expectedVested(
+          amount,
+          start,
+          cliff,
+          duration,
+          slice,
+          start + 900,
+          s.revokedAt
+        )
+      );
     });
 
-    describe("end-to-end scenario", () => {
-      it("team & advisors distribution lifecycle with partial revokes and surplus sweep", async () => {
-        const { owner, token, vesting, alice, bob, carol, treasury } = await loadFixture(deployFixture);
-        // Pre-fund large allowance and keep some surplus in contract.
-        await token.approve(await vesting.getAddress(), toWad(10_000));
-        await vesting.fund(toWad(2_000)); // surplus buffer
-
-        const now = await time.latest();
-        const N = now + 1;
-
-        // Create 3 schedules (team/advisors/liquidity)
-        const tx = await vesting.lockBatch(
-          [alice.address, bob.address, carol.address],
-          [toWad(3000), toWad(1500), toWad(1000)],
-          [N, N, N],
-          [0, 60*60*24*30, 0],                 // bob has 30d cliff
-          [60*60*24*365, 60*60*24*365, 90*24*60*60], // 1y, 1y, 90d
-          [60*60*24, 60*60*24, 60*60*24],      // daily slices
-          [true, false, true]
-        );
-        const rc = await tx.wait();
-        const ids = rc.logs.filter((l)=> (l).fragment?.name === "ScheduleCreated").map((l)=> l.args.id );
-
-        expect(await vesting.totalLocked()).to.equal(toWad(3000 + 1500 + 1000));
-
-        // After ~45 days, Alice & Carol release; Bob is still under cliff (30d -> now 45d => ok)
-        await jumpTo(N + 45*24*60*60);
-
-        // Alice release to herself
-        const relAliceBefore = (await vesting.getSchedule(ids[0])).released;
-        await expect(vesting.connect(alice).release(ids[0], ethers.ZeroAddress))
-          .to.emit(vesting, "TokensReleased");
-        const relAliceAfter = (await vesting.getSchedule(ids[0])).released;
-        expect(relAliceAfter).to.be.greaterThan(relAliceBefore);
-
-        // Bob after cliff (45d > 30d), owner releases to treasury (custom `to`)
-        await expect(vesting.release(ids[1], treasury.address))
-          .to.emit(vesting, "TokensReleased");
-
-        // Carol gets revoked at ~day 45 (pay vested, return unvested)
-        const beforeTL = await vesting.totalLocked();
-        await expect(vesting.revoke(ids[2])).to.emit(vesting, "ScheduleRevoked");
-        const afterTL = await vesting.totalLocked();
-        // locked decreased by full amount of Carol's schedule
-        expect(beforeTL - afterTL).to.equal(toWad(1000));
-
-        // Sweep any surplus (we pre-funded 2000; carol returned unvested -> increases surplus)
-        const balContract = await token.balanceOf(await vesting.getAddress());
-        const surplus = balContract - (await vesting.totalLocked());
-        expect(surplus).to.be.greaterThan(0n);
-        await expect(vesting.withdrawSurplus(owner.address, surplus)).to.emit(vesting, "SurplusWithdrawn");
-
-        // Fast forward to 1 year and finish Alice/Bob
-        await jumpTo(N + 366*24*60*60);
-        await expect(vesting.connect(alice).release(ids[0], ethers.ZeroAddress)).to.not.be.reverted;
-        await expect(vesting.release(ids[1], ethers.ZeroAddress)).to.not.be.reverted;
-
-        const sA = await vesting.getSchedule(ids[0]); 
-        const sB = await vesting.getSchedule(ids[1]);
-        expect(sA.released).to.equal(toWad(3000));
-        expect(sB.released).to.equal(toWad(1500));
-      });
+    it("ScheduleNotFound on unknown id", async () => {
+      const { vesting } = await loadFixture(deployFixture);
+      const fake = ethers.id("nope");
+      await expect(vesting.getSchedule(fake)).to.be.revertedWithCustomError(
+        vesting,
+        "ScheduleNotFound"
+      );
+      await expect(
+        vesting.releasableAmount(fake)
+      ).to.be.revertedWithCustomError(vesting, "ScheduleNotFound");
+      await expect(vesting.vestedAmount(fake, 0)).to.be.revertedWithCustomError(
+        vesting,
+        "ScheduleNotFound"
+      );
     });
+  });
+
+  describe("end-to-end scenario", () => {
+    it("team & advisors distribution lifecycle with partial revokes and surplus sweep", async () => {
+      const { owner, token, vesting, alice, bob, carol, treasury } =
+        await loadFixture(deployFixture);
+      // Pre-fund large allowance and keep some surplus in contract.
+      await token.approve(await vesting.getAddress(), toWad(10_000));
+      await vesting.fund(toWad(2_000)); // surplus buffer
+
+      const now = await time.latest();
+      const N = now + 1;
+
+      // Create 3 schedules (team/advisors/liquidity)
+      const tx = await vesting.lockBatch(
+        [alice.address, bob.address, carol.address],
+        [toWad(3000), toWad(1500), toWad(1000)],
+        [N, N, N],
+        [0, 60 * 60 * 24 * 30, 0], // bob has 30d cliff
+        [60 * 60 * 24 * 365, 60 * 60 * 24 * 365, 90 * 24 * 60 * 60], // 1y, 1y, 90d
+        [60 * 60 * 24, 60 * 60 * 24, 60 * 60 * 24], // daily slices
+        [true, false, true]
+      );
+      const rc = await tx.wait();
+      const ids = rc.logs
+        .filter((l) => l.fragment?.name === "ScheduleCreated")
+        .map((l) => l.args.id);
+
+      expect(await vesting.totalLocked()).to.equal(toWad(3000 + 1500 + 1000));
+
+      // After ~45 days, Alice & Carol release; Bob is still under cliff (30d -> now 45d => ok)
+      await jumpTo(N + 45 * 24 * 60 * 60);
+
+      // Alice release to herself
+      const relAliceBefore = (await vesting.getSchedule(ids[0])).released;
+      await expect(
+        vesting.connect(alice).release(ids[0], ethers.ZeroAddress)
+      ).to.emit(vesting, "TokensReleased");
+      const relAliceAfter = (await vesting.getSchedule(ids[0])).released;
+      expect(relAliceAfter).to.be.greaterThan(relAliceBefore);
+
+      // Bob after cliff (45d > 30d), owner releases to treasury (custom `to`)
+      await expect(vesting.release(ids[1], treasury.address)).to.emit(
+        vesting,
+        "TokensReleased"
+      );
+
+      // Carol gets revoked at ~day 45 (pay vested, return unvested)
+      const beforeTL = await vesting.totalLocked();
+      await expect(vesting.revoke(ids[2])).to.emit(vesting, "ScheduleRevoked");
+      const afterTL = await vesting.totalLocked();
+      // locked decreased by full amount of Carol's schedule
+      expect(beforeTL - afterTL).to.equal(toWad(1000));
+
+      // Sweep any surplus (we pre-funded 2000; carol returned unvested -> increases surplus)
+      const balContract = await token.balanceOf(await vesting.getAddress());
+      const surplus = balContract - (await vesting.totalLocked());
+      expect(surplus).to.be.greaterThan(0n);
+      await expect(vesting.withdrawSurplus(owner.address, surplus)).to.emit(
+        vesting,
+        "SurplusWithdrawn"
+      );
+
+      // Fast forward to 1 year and finish Alice/Bob
+      await jumpTo(N + 366 * 24 * 60 * 60);
+      await expect(vesting.connect(alice).release(ids[0], ethers.ZeroAddress))
+        .to.not.be.reverted;
+      await expect(vesting.release(ids[1], ethers.ZeroAddress)).to.not.be
+        .reverted;
+
+      const sA = await vesting.getSchedule(ids[0]);
+      const sB = await vesting.getSchedule(ids[1]);
+      expect(sA.released).to.equal(toWad(3000));
+      expect(sB.released).to.equal(toWad(1500));
+    });
+  });
+  describe("whitelist", () => {
+    it("allows only whitelisted addresses to lock tokens", async () => {
+      const { owner, alice, bob, token, vesting } = await loadFixture(
+        deployFixture
+      );
+
+      // Enable whitelist
+      await vesting.setWhitelistEnabled(true);
+
+      // Add Alice to whitelist
+      await vesting.addToWhitelist([alice.address]);
+
+      const amount = toWad(100);
+      const now = await time.latest();
+      const start = now + 1;
+      const cliff = 0;
+      const duration = 100;
+      const slice = 10;
+      const revocable = true;
+
+      // Approve tokens
+      await token.approve(await vesting.getAddress(), amount);
+
+      // Alice can lock successfully
+      await expect(
+        vesting.lock(
+          alice.address,
+          amount,
+          start,
+          cliff,
+          duration,
+          slice,
+          revocable
+        )
+      ).to.not.be.reverted;
+
+      // Bob (not whitelisted) cannot lock
+      await token.approve(await vesting.getAddress(), amount);
+      await expect(
+        vesting.lock(
+          bob.address,
+          amount,
+          start,
+          cliff,
+          duration,
+          slice,
+          revocable
+        )
+      ).to.be.revertedWithCustomError(vesting, "NotAuthorized");
+
+      // Remove Alice from whitelist and check she can no longer lock
+      await vesting.removeFromWhitelist([alice.address]);
+      await token.approve(await vesting.getAddress(), amount);
+      await expect(
+        vesting.lock(
+          alice.address,
+          amount,
+          start,
+          cliff,
+          duration,
+          slice,
+          revocable
+        )
+      ).to.be.revertedWithCustomError(vesting, "NotAuthorized");
+    });
+
+    it("owner can manage whitelist in batch", async () => {
+      const { owner, alice, bob, vesting } = await loadFixture(deployFixture);
+
+      // Add both Alice and Bob
+      await vesting.addToWhitelist([alice.address, bob.address]);
+      expect(await vesting.whitelisted(alice.address)).to.eq(true);
+      expect(await vesting.whitelisted(bob.address)).to.eq(true);
+
+      // Remove Bob
+      await vesting.removeFromWhitelist([bob.address]);
+      expect(await vesting.whitelisted(alice.address)).to.eq(true);
+      expect(await vesting.whitelisted(bob.address)).to.eq(false);
+    });
+
+    it("reverts if non-owner tries to manage whitelist", async () => {
+      const { alice, bob, vesting } = await loadFixture(deployFixture);
+
+      await expect(
+        vesting.connect(alice).addToWhitelist([bob.address])
+      ).to.be.revertedWithCustomError(vesting, "OwnableUnauthorizedAccount");
+
+      await expect(
+        vesting.connect(alice).removeFromWhitelist([bob.address])
+      ).to.be.revertedWithCustomError(vesting, "OwnableUnauthorizedAccount");
+    });
+  });
 });

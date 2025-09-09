@@ -7,7 +7,7 @@ async function main() {
   const [deployer] = await hre.ethers.getSigners();
   console.log("Deploying with:", deployer.address);
 
-  const tokenAddress = "0x728FCc07aCA99BF5E002a26B68251FC811480745";
+  const tokenAddress = "0xDDf5F9520F98fb72072163E891bE410919370EBd";
 
   const Vesting = await hre.ethers.getContractFactory("MAGAFox47Vesting", deployer);
   const vesting = await Vesting.deploy(tokenAddress); // no deployer.address as extra arg
