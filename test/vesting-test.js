@@ -1066,4 +1066,99 @@ describe("MAGAFox47Vesting", function () {
       ).to.be.revertedWithCustomError(vesting, "OwnableUnauthorizedAccount");
     });
   });
+  describe("staticLock", function () {
+    it("should create a static vesting schedule", async function () {
+      const { vesting, token, alice } = await loadFixture(deployFixture);
+
+      const amount = toWad(100);
+      const now = await time.latest();
+      const startDelay = 30 * 24 * 60 * 60; // 30 days
+const expectedStart = now + startDelay;
+      // const duration = 86400; // 1 day
+      const duration = 180 * 24 * 60 * 60; // 180 days in seconds
+      await token.approve(await vesting.getAddress(), amount);
+      await vesting.staticLock(alice.address, amount, false);
+
+      const ids = await vesting.schedulesOf(alice.address);
+      expect(ids.length).to.equal(1);
+
+      const schedule = await vesting.getSchedule(ids[0]);
+
+      expect(schedule[0]).to.equal(alice.address); // beneficiary
+      expect(schedule[9]).to.equal(0n); // released
+      expect(schedule[8]).to.equal(amount); // total
+      expect(Number(schedule[3])).to.equal(duration); // duration
+      expect(schedule[5]).to.equal(false); // revocable
+      expect(schedule[1]).to.be.closeTo(expectedStart, 5); // start (allow few seconds tolerance)
+    });
+
+    it("should revert if beneficiary is not whitelisted when whitelist is enabled", async function () {
+      const { vesting, token, bob } = await loadFixture(deployFixture);
+
+      // Adjust this to whatever function your contract actually has
+      await vesting.setWhitelistEnabled(true);
+
+      const amount = toWad(100);
+      await token.approve(await vesting.getAddress(), amount);
+
+      await expect(
+        vesting.staticLock(bob.address, amount, false)
+      ).to.be.revertedWithCustomError(vesting, "NotAuthorized");
+    });
+  });
+
+  describe("staticLockBatch", function () {
+    it("should create multiple static vesting schedules", async function () {
+      const { vesting, token, alice, bob } = await loadFixture(deployFixture);
+
+      const amount1 = toWad(100);
+      const amount2 = toWad(200);
+      // const duration = 86400;
+      const duration = 180 * 24 * 60 * 60; // 180 days in seconds
+
+      await token.approve(await vesting.getAddress(), amount1 + amount2);
+
+      await vesting.staticLockBatch(
+        [alice.address, bob.address],
+        [amount1, amount2],
+        false
+      );
+
+      const idsAlice = await vesting.schedulesOf(alice.address);
+      const idsBob = await vesting.schedulesOf(bob.address);
+
+      expect(idsAlice.length).to.equal(1);
+      expect(idsBob.length).to.equal(1);
+
+      const schedule1 = await vesting.getSchedule(idsAlice[0]);
+      const schedule2 = await vesting.getSchedule(idsBob[0]);
+
+      expect(schedule1[0]).to.equal(alice.address);
+      expect(schedule2[0]).to.equal(bob.address);
+
+      expect(schedule1[8]).to.equal(amount1);
+      expect(schedule2[8]).to.equal(amount2);
+
+      expect(Number(schedule1[3])).to.equal(duration);
+      expect(Number(schedule2[3])).to.equal(duration);
+    });
+
+    it("should revert if whitelist is enabled and someone not whitelisted is included", async function () {
+      const { vesting, token, alice, bob } = await loadFixture(deployFixture);
+
+      await vesting.setWhitelistEnabled(true);
+
+      const amount1 = toWad(100);
+      const amount2 = toWad(200);
+      await token.approve(await vesting.getAddress(), amount1 + amount2);
+
+      await expect(
+        vesting.staticLockBatch(
+          [alice.address, bob.address], // assume bob not whitelisted
+          [amount1, amount2],
+          false
+        )
+      ).to.be.revertedWithCustomError(vesting, "NotAuthorized");
+    });
+  });
 });

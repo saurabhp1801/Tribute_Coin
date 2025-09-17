@@ -334,14 +334,22 @@ import "@openzeppelin/contracts/security/Pausable.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
+// interface IMAGAFox47Vesting {
+//     function lock(
+//         address beneficiary,
+//         uint128 amount,
+//         uint32 start,
+//         uint32 cliff,
+//         uint32 duration,
+//         uint32 slice,
+//         bool revocable
+//     ) external returns (bytes32);
+// }
+
 interface IMAGAFox47Vesting {
-    function lock(
+    function staticLock(
         address beneficiary,
         uint128 amount,
-        uint32 start,
-        uint32 cliff,
-        uint32 duration,
-        uint32 slice,
         bool revocable
     ) external returns (bytes32);
 }
@@ -357,6 +365,7 @@ error InsufficientPresaleBalance();
 error InsufficientVestingAllowance();
 error TreasuryNotSet();
 error NothingToApprove();
+error SaleNotActive();
 
 contract PreSellMagaFox is Ownable, Pausable, ReentrancyGuard {
     using SafeERC20 for IERC20;
@@ -484,6 +493,12 @@ contract PreSellMagaFox is Ownable, Pausable, ReentrancyGuard {
     function buy(
         address beneficiary
     ) external payable nonReentrant whenNotPaused onlyOpen returns (bytes32) {
+        // Ensure that the sale is active (within the sale start and end time)
+        uint256 currentTime = block.timestamp;
+        if (currentTime < saleStart || currentTime > saleEnd) {
+            revert SaleNotActive();
+        }
+
         if (beneficiary == address(0)) revert ZeroAddress();
         if (msg.value == 0) revert InvalidParams();
 
@@ -517,13 +532,19 @@ contract PreSellMagaFox is Ownable, Pausable, ReentrancyGuard {
         totalSold += tokenAmount;
 
         // interactions: call vesting.lock (vesting will pull tokens via transferFrom)
-        bytes32 scheduleId = vesting.lock(
+        // bytes32 scheduleId = vesting.lock(
+        //     beneficiary,
+        //     uint128(tokenAmount),
+        //     uint32(block.timestamp + _vt.startDelay),
+        //     _vt.cliff,
+        //     _vt.duration,
+        //     _vt.slice,
+        //     _vt.revocable
+        // );
+
+        bytes32 scheduleId = vesting.staticLock(
             beneficiary,
             uint128(tokenAmount),
-            uint32(block.timestamp + _vt.startDelay),
-            _vt.cliff,
-            _vt.duration,
-            _vt.slice,
             _vt.revocable
         );
 

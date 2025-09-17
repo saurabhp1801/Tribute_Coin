@@ -353,6 +353,9 @@
 
 import hre from "hardhat";
 const { ethers } = hre;
+import * as dotenv from "dotenv";
+dotenv.config();
+
 
 const zeros10 = () => new Array(10).fill(ethers.ZeroAddress);
 const toWad = (n) => ethers.parseUnits(String(n), 18);
@@ -386,15 +389,18 @@ async function main() {
   // 3) Prepare Presale constructor args
   // NOTE: `ratePerEth` is "tokens per ETH" scaled to 1e18.
   // If you want 100 tokens per ETH -> rate = 100 * 1e18
-  const tokensPerEth = 100n; // change as needed
+  // const tokensPerEth = 100n; // change as needed
+  const tokensPerEth = BigInt(process.env.TOKENS_PER_ETH); // from .env
+  console.log("🚀 ~ main ~ tokensPerEth:", tokensPerEth)
   const ratePerEth = ethers.parseUnits(String(tokensPerEth), 18); // 100 * 1e18
+  console.log("🚀 ~ main ~ ratePerEth:", ratePerEth)
 
   const now = Math.floor(Date.now() / 1000);
   const saleStart = now + 60;          // start in 60s
   const saleEnd = now + 86400;         // end after 24h
   const hardCapTokens = toWad(10_000); // hard cap in token units (18-decimal)
-  const minPerW = toWad(0);            // min per wallet
-  const maxPerW = toWad(0);            // max per wallet (0 = no per-wallet cap)
+  const minPerW = toWad(10);            // min per wallet
+  const maxPerW = toWad(500);            // max per wallet (0 = no per-wallet cap)
 
   // VestingTemplate must be passed as a tuple/array to match the struct:
   // VestingTemplate { uint32 startDelay; uint32 cliff; uint32 duration; uint32 slice; bool revocable; }

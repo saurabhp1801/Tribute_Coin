@@ -1,5 +1,3 @@
-
-
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.19;
 
@@ -16,13 +14,16 @@ pragma solidity ^0.8.19;
 
 interface IERC20 {
     function totalSupply() external view returns (uint256);
+
     function balanceOf(address a) external view returns (uint256);
+
     function allowance(
         address owner,
         address spender
     ) external view returns (uint256);
 
     function transfer(address to, uint256 value) external returns (bool);
+
     function approve(address spender, uint256 value) external returns (bool);
 
     function transferFrom(
@@ -30,6 +31,7 @@ interface IERC20 {
         address to,
         uint256 value
     ) external returns (bool);
+
     event Transfer(address indexed from, address indexed to, uint256 value);
     event Approval(
         address indexed owner,
@@ -156,8 +158,19 @@ contract MAGAFox47Vesting is Ownable, ReentrancyGuard {
     // ---------- Token & accounting ----------
     IERC20 public immutable token; // dedicated ERC20 (MAGAFox47)
     uint256 public totalLocked; // tracks (sum of schedule.total - schedule.released) across all active schedules
+    // // ---------- Static Vesting Parameters ----------
+    // uint32 private constant _START_DELAY = 30 days; // vesting starts after 30 days
+    // uint32 private constant _CLIFF = 30 days; // 1 month cliff
+    // uint32 private constant _DURATION = 180 days; // 6 months vesting
+    // uint32 private constant _SLICE = 1 days; // daily release
 
-// ---------- Whitelist ----------
+    // ---------- Test Vesting Parameters ----------
+    uint32 private constant _START_DELAY = 1 hours; // vesting starts after 1 hour
+    uint32 private constant _CLIFF = 1 hours; // 1 hour cliff
+    uint32 private constant _DURATION = 6 hours; // total vesting period 6 hours
+    uint32 private constant _SLICE = 1 hours; // release every 1 hour
+
+    // ---------- Whitelist ----------
     bool public whitelistEnabled;
     mapping(address => bool) public whitelisted;
 
@@ -229,17 +242,18 @@ contract MAGAFox47Vesting is Ownable, ReentrancyGuard {
      * @dev Requires prior token approval on this contract for `amount`.
      */
 
-// for exm-> alice get 1000 magafox token over 6 month with i month cliff
+    // for exm-> alice get 1000 magafox token over 6 month with i month cliff
     function lock(
-        address beneficiary, 
+        address beneficiary,
         uint128 amount,
-        uint32 start,    //1 sept
-        uint32 cliff,    // 1 month
-        uint32 duration,  //total vesting peiod 6 month
-        uint32 slice,    //how often token relese exm every 30 days
+        uint32 start, //1 sept
+        uint32 cliff, // 1 month
+        uint32 duration, //total vesting peiod 6 month
+        uint32 slice, //how often token relese exm every 30 days
         bool revocable
-    ) external  nonReentrant returns (bytes32 id) {
-         if (whitelistEnabled && !whitelisted[beneficiary]) revert NotAuthorized();
+    ) external nonReentrant returns (bytes32 id) {
+        if (whitelistEnabled && !whitelisted[beneficiary])
+            revert NotAuthorized();
         // Validate input parameters to avoid invalid schedules
         _validateParams(beneficiary, amount, start, cliff, duration, slice);
 
@@ -249,16 +263,16 @@ contract MAGAFox47Vesting is Ownable, ReentrancyGuard {
 
         //  Generate a new unique ID for this vesting schedule
         id = _newId(beneficiary, start, amount);
-         //  Create a new Schedule struct in storage
+        //  Create a new Schedule struct in storage
         Schedule storage s = _schedules[id];
 
         //populate the schedule details
-        s.beneficiary = beneficiary;         // Address who will receive vested tokens
-        s.start = start;                     // Vesting start timestamp
-        s.cliff = cliff;                     //Cliff duration (time until first release)
-        s.duration = duration;               //Total vesting length
-        s.total = amount;                     // Total tokens locked for this schedule
-        s.slice = slice;                      // Interval for linear vesting (time-based)
+        s.beneficiary = beneficiary; // Address who will receive vested tokens
+        s.start = start; // Vesting start timestamp
+        s.cliff = cliff; //Cliff duration (time until first release)
+        s.duration = duration; //Total vesting length
+        s.total = amount; // Total tokens locked for this schedule
+        s.slice = slice; // Interval for linear vesting (time-based)
         s.flags = revocable ? _F_REVOCABLE : 0; // Store revocable flag if applicable
         // revokedAt defaults to 0
 
@@ -267,7 +281,7 @@ contract MAGAFox47Vesting is Ownable, ReentrancyGuard {
         // Track this schedule ID under the beneficiary’s list
         _beneficiarySchedules[beneficiary].push(id);
 
-        //Emit event for  tracking 
+        //Emit event for  tracking
         emit ScheduleCreated(
             id,
             beneficiary,
@@ -280,6 +294,50 @@ contract MAGAFox47Vesting is Ownable, ReentrancyGuard {
         );
     }
 
+    function staticLock(
+        address beneficiary,
+        uint128 amount,
+        bool revocable
+    ) external nonReentrant returns (bytes32 id) {
+        if (whitelistEnabled && !whitelisted[beneficiary])
+            revert NotAuthorized();
+
+        uint32 nowTs = uint32(block.timestamp);
+        uint32 start = nowTs + _START_DELAY;
+        uint32 cliff = _CLIFF;
+        uint32 duration = _DURATION;
+        uint32 slice = _SLICE;
+
+        _validateParams(beneficiary, amount, start, cliff, duration, slice);
+
+        // pull tokens
+        token.safeTransferFrom(msg.sender, address(this), amount);
+
+        id = _newId(beneficiary, start, amount);
+
+        Schedule storage s = _schedules[id];
+        s.beneficiary = beneficiary;
+        s.start = start;
+        s.cliff = cliff;
+        s.duration = duration;
+        s.total = amount;
+        s.slice = slice;
+        s.flags = revocable ? _F_REVOCABLE : 0;
+
+        totalLocked += amount;
+        _beneficiarySchedules[beneficiary].push(id);
+
+        emit ScheduleCreated(
+            id,
+            beneficiary,
+            amount,
+            start,
+            cliff,
+            duration,
+            slice,
+            revocable
+        );
+    }
 
     /**
      * @notice Batch create schedules (saves gas vs multiple single calls).
@@ -351,12 +409,77 @@ contract MAGAFox47Vesting is Ownable, ReentrancyGuard {
         }
     }
 
+    function staticLockBatch(
+        address[] calldata beneficiaries,
+        uint128[] calldata amounts,
+        bool revocable
+    ) external nonReentrant returns (bytes32[] memory ids) {
+        uint256 n = beneficiaries.length;
+        if (n == 0 || n != amounts.length) revert InvalidParams();
+
+        uint32 nowTs = uint32(block.timestamp);
+        uint32 start = nowTs + _START_DELAY;
+        uint32 cliff = _CLIFF;
+        uint32 duration = _DURATION;
+        uint32 slice = _SLICE;
+
+        // Pre-pull total amount
+        uint256 sum;
+        for (uint256 i = 0; i < n; ) {
+            sum += amounts[i];
+            unchecked {
+                ++i;
+            }
+        }
+        if (sum == 0) revert InvalidParams();
+        token.safeTransferFrom(msg.sender, address(this), sum);
+
+        ids = new bytes32[](n);
+
+        for (uint256 i; i < n; ) {
+            address b = beneficiaries[i];
+            uint128 a = amounts[i];
+            if (whitelistEnabled && !whitelisted[b]) revert NotAuthorized();
+
+            _validateParams(b, a, start, cliff, duration, slice);
+
+            bytes32 id = _newId(b, start, a);
+            ids[i] = id;
+
+            Schedule storage s = _schedules[id];
+            s.beneficiary = b;
+            s.start = start;
+            s.cliff = cliff;
+            s.duration = duration;
+            s.total = a;
+            s.slice = slice;
+            s.flags = revocable ? _F_REVOCABLE : 0;
+
+            totalLocked += a;
+            _beneficiarySchedules[b].push(id);
+
+            emit ScheduleCreated(
+                id,
+                b,
+                a,
+                start,
+                cliff,
+                duration,
+                slice,
+                revocable
+            );
+            unchecked {
+                ++i;
+            }
+        }
+    }
+
     // ---------- Release & revoke ----------
     /**
      * @notice Releases currently releasable tokens to `to` (or to beneficiary if `to==0`).
      *         Callable by the beneficiary or the owner.
      */
-  
+
     function release(bytes32 id, address to) external nonReentrant {
         Schedule storage s = _schedules[id];
         if (s.beneficiary == address(0)) revert ScheduleNotFound();
@@ -390,7 +513,6 @@ contract MAGAFox47Vesting is Ownable, ReentrancyGuard {
         if (s.revokedAt != 0) revert AlreadyRevoked();
         if ((s.flags & _F_REVOCABLE) == 0) revert NotRevocable();
 
-
         uint32 t = uint32(block.timestamp);
         s.revokedAt = t;
 
@@ -406,10 +528,9 @@ contract MAGAFox47Vesting is Ownable, ReentrancyGuard {
 
         // Pay vested to beneficiary if any
         if (releasable > 0) {
-        
             s.released = uint128(uint256(releasedSoFar) + releasable);
             totalLocked -= releasable;
-    
+
             address ben = s.beneficiary;
             token.safeTransfer(ben, releasable);
             emit TokensReleased(id, ben, ben, releasable);
@@ -424,8 +545,6 @@ contract MAGAFox47Vesting is Ownable, ReentrancyGuard {
         emit ScheduleRevoked(id, s.beneficiary, releasable, unvested);
     }
 
-   
-
     // ---------- Owner funding / surplus ----------
     /**
      * @notice Optional: fund the contract with extra tokens (e.g., to cover future schedules in one approval).
@@ -436,7 +555,7 @@ contract MAGAFox47Vesting is Ownable, ReentrancyGuard {
         emit Funded(msg.sender, amount);
     }
 
-  function setWhitelistEnabled(bool enabled) external onlyOwner {
+    function setWhitelistEnabled(bool enabled) external onlyOwner {
         whitelistEnabled = enabled;
     }
 
@@ -450,7 +569,7 @@ contract MAGAFox47Vesting is Ownable, ReentrancyGuard {
     function removeFromWhitelist(address[] calldata users) external onlyOwner {
         for (uint256 i = 0; i < users.length; i++) {
             whitelisted[users[i]] = false;
-             emit WhitelistUpdated(users[i], false); // emit event
+            emit WhitelistUpdated(users[i], false); // emit event
         }
     }
 
@@ -515,7 +634,6 @@ contract MAGAFox47Vesting is Ownable, ReentrancyGuard {
             s.cliff,
             s.duration,
             s.slice,
-    
             (s.flags & _F_REVOCABLE) != 0,
             s.revokedAt != 0,
             s.revokedAt,
@@ -612,7 +730,6 @@ contract MAGAFox47Vesting is Ownable, ReentrancyGuard {
         uint128 vested = _vestedAmountAt(s, ts);
         uint128 rel = s.released;
         return vested > rel ? vested - rel : 0;
-        
     }
 
     function _vestedAmountAt(
@@ -647,7 +764,3 @@ contract MAGAFox47Vesting is Ownable, ReentrancyGuard {
         revert EthNotAccepted();
     }
 }
-
-
-
-
