@@ -108,9 +108,9 @@ describe("MagaFox47", function () {
       expect(communityIDO.released).to.equal(expectedIDOReleased);
       expect(communityIDO.locked).to.equal(false);
       
-      // Team Advisors (10%)
+      // Owners Allocation (15%)
       const ownersAllocation = await magaFox.ownersAllocation();        
-      const expectedTeamAmount = (initialSupply * 10n) / 100n;
+      const expectedTeamAmount = (initialSupply * 15n) / 100n;
       expect(ownersAllocation.totalAmount).to.equal(expectedTeamAmount);   
       expect(ownersAllocation.released).to.equal(0);
       expect(ownersAllocation.locked).to.equal(false);

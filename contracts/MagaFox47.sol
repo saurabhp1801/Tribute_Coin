@@ -78,16 +78,16 @@ contract MagaFox47 is
     }
 
     // Core tokenomics allocations
-    TokenAllocation public charityTreasury; // 20%
-    TokenAllocation public seed; // 5%
-    TokenAllocation public privateStrategic; // 7%
-    TokenAllocation public communityIDO; // 10%
-    TokenAllocation public liquidityAuction; // 5%
-    TokenAllocation public stakingRewards; // 15%
-    TokenAllocation public liquidityMaking; // 10%
-    TokenAllocation public ownersAllocation; // 10%
-    TokenAllocation public growthPartnerships; // 8%
-    TokenAllocation public futureDaoReserve; // 10%
+    TokenAllocation public charityTreasury; // 20% 
+    TokenAllocation public seed; // 5%    
+    TokenAllocation public privateStrategic; // 7%  
+    TokenAllocation public communityIDO; // 10%    
+    TokenAllocation public liquidityAuction; // 5%   
+    TokenAllocation public stakingRewards; // 13%    
+    TokenAllocation public liquidityMaking; // 9%    
+    TokenAllocation public ownersAllocation; // 15%   
+    TokenAllocation public growthPartnerships; // 8%  
+    TokenAllocation public futureDaoReserve; // 8%   
 
     // Events - consolidated to reduce bytecode
     event WalletAction(uint8 actionType, WalletType walletType, address wallet);
@@ -227,7 +227,7 @@ contract MagaFox47 is
 
         // 15% for staking rewards (supply-halving every 18m)
         stakingRewards = TokenAllocation({
-            totalAmount: (totalSupply * 15) / 100,
+            totalAmount: (totalSupply * 13) / 100,
             released: 0,
             startTime: now_,
             duration: oneMonth * 18 * 4, // 4 cycles of 18 months
@@ -237,7 +237,7 @@ contract MagaFox47 is
 
         // 10% for liquidity & market-making (12m lock, DAO-controlled)
         liquidityMaking = TokenAllocation({
-            totalAmount: (totalSupply * 10) / 100,
+            totalAmount: (totalSupply * 9) / 100,
             released: 0,
             startTime: now_ + oneYear, // 12m lock
             duration: 1 days, // Released at DAO discretion after lock
@@ -247,7 +247,7 @@ contract MagaFox47 is
 
         // 10% for team & advisors (12m cliff → 36m linear)
         ownersAllocation = TokenAllocation({ 
-            totalAmount: (totalSupply * 10) / 100,
+            totalAmount: (totalSupply * 15) / 100,
             released: 0,
             startTime: now_ + oneYear, // 12m cliff
             duration: oneMonth * 36, // 36m linear after cliff
@@ -267,7 +267,7 @@ contract MagaFox47 is
 
         // 10% for future reserve/DAO grants (No unlock without vote)
         futureDaoReserve = TokenAllocation({
-            totalAmount: (totalSupply * 10) / 100,
+            totalAmount: (totalSupply * 8) / 100,
             released: 0,
             startTime: now_,
             duration: 0, // Only unlocked by DAO vote
