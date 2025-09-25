@@ -413,10 +413,14 @@ async function main() {
   ];
 
   // 4) Deploy Presale (match the constructor signature exactly)
+  // Treasury wallet set to deployer initially
+const treasuryWallet = deployer.address; 
+console.log("🚀 Treasury wallet set to deployer:", treasuryWallet);
   const Presale = await ethers.getContractFactory("PreSellMagaFox");
   const presale = await Presale.deploy(
     await token.getAddress(),    // tokenAddr
     await vesting.getAddress(),  // vestingAddr
+    treasuryWallet,
     ratePerEth,                  // ratePerEth (tokens per ETH, scaled by 1e18)
     saleStart,                   // startTs
     saleEnd,                     // endTs

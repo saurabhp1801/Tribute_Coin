@@ -397,6 +397,284 @@
 
 // });
 
+
+
+
+
+
+
+
+
+
+
+// import { expect } from "chai";
+// import hre from "hardhat";
+// const { ethers } = hre;
+
+// const toWad = (n) => ethers.parseUnits(String(n), 18);
+
+// async function fastForwardTo(target) {
+//   const block = await ethers.provider.getBlock("latest");
+//   const latest = block.timestamp;
+//   if (target <= latest) {
+//     target = latest + 1; // ensure strictly greater
+//   }
+//   await hre.network.provider.send("evm_setNextBlockTimestamp", [target]);
+//   await hre.network.provider.send("evm_mine");
+// }
+
+// describe("PreSellMagaFox", function () {
+//   let deployer, alice, bob, stranger;
+//   let token, vesting, presale;
+//   let startTs, endTs;
+
+//   beforeEach(async function () {
+//     [deployer, alice, bob, stranger] = await ethers.getSigners();
+
+//     // Deploy token
+//     const Token = await ethers.getContractFactory("MagaFox47");
+//     token = await Token.deploy(
+//       "MagaFox47",
+//       "MF47",
+//       toWad(1_000_000_000),
+//       "ipfs://fake",
+//       new Array(10).fill(ethers.ZeroAddress)
+//     );
+//     await token.waitForDeployment();
+//     await token.setContractState(1, true);
+//     await token.mintWithoutRestriction(deployer.address, toWad(1_000_000_000));
+
+//     // Deploy vesting mock (simplified for testing, must have lock())
+//     const Vesting = await ethers.getContractFactory("MAGAFox47Vesting");
+//     vesting = await Vesting.deploy(await token.getAddress());
+//     await vesting.waitForDeployment();
+
+//     // Sale times
+//     // Sale times
+//     const now = (await ethers.provider.getBlock("latest")).timestamp;
+//     startTs = now + 3600; // Sale starts in 1 hour
+//     endTs = now + 7200; // Sale ends in 2 hours
+//     // Vesting template
+//     const vt = [0, 0, 3600, 60, false];
+
+//     // Deploy presale
+//     const Presale = await ethers.getContractFactory("PreSellMagaFox");
+//     presale = await Presale.deploy(
+//       await token.getAddress(),
+//       await vesting.getAddress(),
+//       ethers.parseUnits("100", 18), // 100 tokens per ETH
+//       startTs,
+//       endTs,
+//       toWad(100_000), // hard cap
+//       toWad(10), // min
+//       toWad(50_000), // max
+//       vt
+//     );
+//     await presale.waitForDeployment();
+
+//     // Fund presale
+//     await token.transfer(await presale.getAddress(), toWad(100_000));
+//     await presale.approveVesting(toWad(100_000));
+//   });
+
+//   // ---- Core Buy flow ----
+//   describe("buy()", function () {
+//     it("reverts if sale not open", async () => {
+//       // presale already funded in beforeEach
+//       await token.transfer(await presale.getAddress(), toWad(1000));
+//       await presale.connect(deployer).approveVesting(toWad(1000));
+
+//       // Fast forward to BEFORE saleStart
+//       await fastForwardTo(startTs - 10);
+
+//       await expect(
+//         presale.connect(alice).buy(alice.address, { value: toWad(1) })
+//       ).to.be.revertedWithCustomError(presale, "SaleNotOpen");
+//     });
+
+//     it("allows purchase when sale is open", async () => {
+//       await fastForwardTo(startTs + 10);
+
+//       await expect(
+//         presale.connect(alice).buy(alice.address, { value: toWad(1) })
+//       ).to.emit(presale, "Purchased");
+
+//       const purchased = await presale.purchased(alice.address);
+//       expect(purchased).to.be.gt(0);
+//     });
+
+//     it("reverts if sale ended", async () => {
+//       await fastForwardTo(endTs + 10);
+
+//       await expect(
+//         presale.connect(alice).buy(alice.address, { value: toWad(1) })
+//       ).to.be.revertedWithCustomError(presale, "SaleNotOpen");
+//     });
+
+//     it("reverts if zero beneficiary", async () => {
+//       await fastForwardTo(startTs + 10);
+//       await expect(
+//         presale.connect(alice).buy(ethers.ZeroAddress, { value: toWad(1) })
+//       ).to.be.revertedWithCustomError(presale, "ZeroAddress");
+//     });
+
+//     it("allows purchase and locks tokens into vesting", async () => {
+//       await hre.network.provider.send("evm_setNextBlockTimestamp", [
+//         startTs + 10,
+//       ]);
+
+//       const weiValue = ethers.parseEther("1");
+//       const tx = await presale
+//         .connect(alice)
+//         .buy(alice.address, { value: weiValue });
+//       const rc = await tx.wait();
+
+//       const ev = rc.logs.find((l) => l.fragment?.name === "Purchased");
+//       expect(ev).to.not.be.undefined;
+
+//       const purchased = await presale.purchased(alice.address);
+//       expect(purchased).to.be.gt(0);
+//     });
+
+//     it("respects min and max per wallet", async () => {
+//       await hre.network.provider.send("evm_setNextBlockTimestamp", [
+//         startTs + 10,
+//       ]);
+
+//       // Too small
+//       await expect(
+//         presale
+//           .connect(alice)
+//           .buy(alice.address, { value: ethers.parseEther("0.00001") })
+//       ).to.be.revertedWithCustomError(presale, "AmountTooSmall");
+
+//       // Too large
+//       await expect(
+//         presale
+//           .connect(alice)
+//           .buy(alice.address, { value: ethers.parseEther("1000") })
+//       ).to.be.revertedWithCustomError(presale, "AmountTooLarge");
+//     });
+
+//     it("reverts if hard cap exceeded", async () => {
+//       await hre.network.provider.send("evm_setNextBlockTimestamp", [
+//         startTs + 10,
+//       ]);
+
+//       // sell close to hard cap
+//       await presale
+//         .connect(alice)
+//         .buy(alice.address, { value: ethers.parseEther("9") });
+//       await expect(
+//         presale
+//           .connect(bob)
+//           .buy(bob.address, { value: ethers.parseEther("1000") })
+//       ).to.be.revertedWithCustomError(presale, "AmountTooLarge");
+//     });
+//   });
+
+//   // ---- Whitelist ----
+//   // describe("whitelist", function () {
+//   //   it("blocks non-whitelisted when enabled", async () => {
+//   //     await presale.setWhitelistEnabled(true);
+//   //     await hre.network.provider.send("evm_setNextBlockTimestamp", [
+//   //       startTs + 10,
+//   //     ]);
+//   //     await expect(
+//   //       presale
+//   //         .connect(alice)
+//   //         .buy(alice.address, { value: ethers.parseEther("1") })
+//   //     ).to.be.revertedWithCustomError(presale, "NotWhitelisted");
+
+//   //     await presale.setWhitelist([alice.address], true);
+//   //     await expect(
+//   //       presale
+//   //         .connect(alice)
+//   //         .buy(alice.address, { value: ethers.parseEther("1") })
+//   //     ).to.not.be.reverted;
+//   //   });
+//   // });
+
+//   // ---- Admin functions ----
+//   describe("admin", function () {
+//     it("owner can set rate/times/caps", async () => {
+//       await expect(presale.setRate(ethers.parseUnits("200", 18))).to.emit(
+//         presale,
+//         "RateUpdated"
+//       );
+//       await expect(presale.setTimes(startTs, endTs + 100)).to.emit(
+//         presale,
+//         "TimesUpdated"
+//       );
+//       await expect(
+//         presale.setCaps(toWad(200_000), toWad(5), toWad(50_000))
+//       ).to.emit(presale, "CapsUpdated");
+//     });
+
+//     it("pause/unpause works", async () => {
+//       await presale.pause();
+//       await hre.network.provider.send("evm_setNextBlockTimestamp", [
+//         startTs + 10,
+//       ]);
+//       await expect(
+//         presale
+//           .connect(alice)
+//           .buy(alice.address, { value: ethers.parseEther("1") })
+//       ).to.be.revertedWith("Pausable: paused");
+
+//       await presale.unpause();
+//       await expect(
+//         presale
+//           .connect(alice)
+//           .buy(alice.address, { value: ethers.parseEther("1") })
+//       ).to.not.be.reverted;
+//     });
+//   });
+
+//   // // ---- Withdraw ----
+//   describe("funds", function () {
+//     it("owner can withdraw ETH", async () => {
+//       await hre.network.provider.send("evm_setNextBlockTimestamp", [
+//         startTs + 10,
+//       ]);
+//       await presale
+//         .connect(alice)
+//         .buy(alice.address, { value: ethers.parseEther("1") });
+
+//       const balBefore = await ethers.provider.getBalance(deployer.address);
+//       const tx = await presale.withdrawFunds(
+//         deployer.address,
+//         ethers.parseEther("1")
+//       );
+//       await tx.wait();
+//       const balAfter = await ethers.provider.getBalance(deployer.address);
+//       expect(balAfter).to.be.gt(balBefore);
+//     });
+
+//     it("owner cannot recover sale token", async () => {
+//       await expect(
+//         presale.recoverERC20(await token.getAddress(), deployer.address, 100)
+//       ).to.be.revertedWithCustomError(presale, "InvalidParams");
+//     });
+//   });
+
+//   // ---- Allowance ----
+//   describe("vesting allowance", function () {
+//     it("owner can approve vesting", async () => {
+//       await expect(presale.approveVesting(toWad(1000))).to.emit(
+//         presale,
+//         "VestingAllowanceApproved"
+//       );
+//     });
+//   });
+// });
+
+
+
+
+
+
+
 import { expect } from "chai";
 import hre from "hardhat";
 const { ethers } = hre;
@@ -406,9 +684,7 @@ const toWad = (n) => ethers.parseUnits(String(n), 18);
 async function fastForwardTo(target) {
   const block = await ethers.provider.getBlock("latest");
   const latest = block.timestamp;
-  if (target <= latest) {
-    target = latest + 1; // ensure strictly greater
-  }
+  if (target <= latest) target = latest + 1;
   await hre.network.provider.send("evm_setNextBlockTimestamp", [target]);
   await hre.network.provider.send("evm_mine");
 }
@@ -434,16 +710,16 @@ describe("PreSellMagaFox", function () {
     await token.setContractState(1, true);
     await token.mintWithoutRestriction(deployer.address, toWad(1_000_000_000));
 
-    // Deploy vesting mock (simplified for testing, must have lock())
+    // Deploy vesting mock
     const Vesting = await ethers.getContractFactory("MAGAFox47Vesting");
     vesting = await Vesting.deploy(await token.getAddress());
     await vesting.waitForDeployment();
 
     // Sale times
-    // Sale times
     const now = (await ethers.provider.getBlock("latest")).timestamp;
     startTs = now + 3600; // Sale starts in 1 hour
-    endTs = now + 7200; // Sale ends in 2 hours
+    endTs = now + 7200;   // Sale ends in 2 hours
+
     // Vesting template
     const vt = [0, 0, 3600, 60, false];
 
@@ -452,12 +728,13 @@ describe("PreSellMagaFox", function () {
     presale = await Presale.deploy(
       await token.getAddress(),
       await vesting.getAddress(),
-      ethers.parseUnits("100", 18), // 100 tokens per ETH
+      deployer.address,      // treasury wallet set to deployer
+      ethers.parseUnits("100", 18),
       startTs,
       endTs,
-      toWad(100_000), // hard cap
-      toWad(10), // min
-      toWad(50_000), // max
+      toWad(100_000),
+      toWad(10),
+      toWad(50_000),
       vt
     );
     await presale.waitForDeployment();
@@ -469,7 +746,10 @@ describe("PreSellMagaFox", function () {
 
   // ---- Core Buy flow ----
   describe("buy()", function () {
-    it("reverts if sale not open", async () => {
+
+
+
+  it("reverts if sale not open", async () => {
       // presale already funded in beforeEach
       await token.transfer(await presale.getAddress(), toWad(1000));
       await presale.connect(deployer).approveVesting(toWad(1000));
@@ -480,6 +760,18 @@ describe("PreSellMagaFox", function () {
       await expect(
         presale.connect(alice).buy(alice.address, { value: toWad(1) })
       ).to.be.revertedWithCustomError(presale, "SaleNotOpen");
+    });
+
+
+    it("sends ETH directly to treasury", async () => {
+      await fastForwardTo(startTs + 10);
+
+      const treasuryBefore = await ethers.provider.getBalance(deployer.address);
+      const weiValue = ethers.parseEther("1");
+      await presale.connect(alice).buy(alice.address, { value: weiValue });
+      const treasuryAfter = await ethers.provider.getBalance(deployer.address);
+
+      expect(treasuryAfter).to.be.gt(treasuryBefore);
     });
 
     it("allows purchase when sale is open", async () => {
@@ -493,20 +785,6 @@ describe("PreSellMagaFox", function () {
       expect(purchased).to.be.gt(0);
     });
 
-    it("reverts if sale ended", async () => {
-      await fastForwardTo(endTs + 10);
-
-      await expect(
-        presale.connect(alice).buy(alice.address, { value: toWad(1) })
-      ).to.be.revertedWithCustomError(presale, "SaleNotOpen");
-    });
-
-    it("reverts if zero beneficiary", async () => {
-      await fastForwardTo(startTs + 10);
-      await expect(
-        presale.connect(alice).buy(ethers.ZeroAddress, { value: toWad(1) })
-      ).to.be.revertedWithCustomError(presale, "ZeroAddress");
-    });
 
     it("allows purchase and locks tokens into vesting", async () => {
       await hre.network.provider.send("evm_setNextBlockTimestamp", [
@@ -526,25 +804,40 @@ describe("PreSellMagaFox", function () {
       expect(purchased).to.be.gt(0);
     });
 
-    it("respects min and max per wallet", async () => {
-      await hre.network.provider.send("evm_setNextBlockTimestamp", [
-        startTs + 10,
-      ]);
-
-      // Too small
+    it("reverts if sale not open", async () => {
+      await fastForwardTo(startTs - 10);
       await expect(
-        presale
-          .connect(alice)
-          .buy(alice.address, { value: ethers.parseEther("0.00001") })
+        presale.connect(alice).buy(alice.address, { value: toWad(1) })
+      ).to.be.revertedWithCustomError(presale, "SaleNotOpen");
+    });
+     it("reverts if sale ended", async () => {
+      await fastForwardTo(endTs + 10);
+
+      await expect(
+        presale.connect(alice).buy(alice.address, { value: toWad(1) })
+      ).to.be.revertedWithCustomError(presale, "SaleNotOpen");
+    });
+
+    it("reverts if zero beneficiary", async () => {
+      await fastForwardTo(startTs + 10);
+      await expect(
+        presale.connect(alice).buy(ethers.ZeroAddress, { value: toWad(1) })
+      ).to.be.revertedWithCustomError(presale, "ZeroAddress");
+    });
+
+    it("respects min and max per wallet", async () => {
+      await fastForwardTo(startTs + 10);
+
+      await expect(
+        presale.connect(alice).buy(alice.address, { value: ethers.parseEther("0.00001") })
       ).to.be.revertedWithCustomError(presale, "AmountTooSmall");
 
-      // Too large
       await expect(
-        presale
-          .connect(alice)
-          .buy(alice.address, { value: ethers.parseEther("1000") })
+        presale.connect(alice).buy(alice.address, { value: ethers.parseEther("1000") })
       ).to.be.revertedWithCustomError(presale, "AmountTooLarge");
     });
+
+    
 
     it("reverts if hard cap exceeded", async () => {
       await hre.network.provider.send("evm_setNextBlockTimestamp", [
@@ -561,90 +854,69 @@ describe("PreSellMagaFox", function () {
           .buy(bob.address, { value: ethers.parseEther("1000") })
       ).to.be.revertedWithCustomError(presale, "AmountTooLarge");
     });
+
+
   });
 
-  // ---- Whitelist ----
-  // describe("whitelist", function () {
-  //   it("blocks non-whitelisted when enabled", async () => {
-  //     await presale.setWhitelistEnabled(true);
-  //     await hre.network.provider.send("evm_setNextBlockTimestamp", [
-  //       startTs + 10,
-  //     ]);
-  //     await expect(
-  //       presale
-  //         .connect(alice)
-  //         .buy(alice.address, { value: ethers.parseEther("1") })
-  //     ).to.be.revertedWithCustomError(presale, "NotWhitelisted");
+// ---- Whitelist ----
+ describe("whitelist", function () {
+    it("blocks non-whitelisted when enabled", async () => {
+      await presale.setWhitelistEnabled(true);
 
-  //     await presale.setWhitelist([alice.address], true);
-  //     await expect(
-  //       presale
-  //         .connect(alice)
-  //         .buy(alice.address, { value: ethers.parseEther("1") })
-  //     ).to.not.be.reverted;
-  //   });
-  // });
+      // Add custom error to contract if not present
+      await hre.network.provider.send("evm_setNextBlockTimestamp", [
+        startTs + 10,
+      ]);
+
+      await expect(
+        presale.connect(alice).buy(alice.address, { value: ethers.parseEther("1") })
+      ).to.be.revertedWithCustomError(presale, "NotWhitelisted");
+
+      // Now whitelist Alice
+      await presale.setWhitelist([alice.address], true);
+      await expect(
+        presale.connect(alice).buy(alice.address, { value: ethers.parseEther("1") })
+      ).to.not.be.reverted;
+    });
+});
+
+describe("treasury management", function () {
+    it("owner can update treasury address and ETH is sent there", async () => {
+      const newTreasury = bob.address;
+      await presale.setTreasury(newTreasury);
+
+      // Fast forward to sale start
+      await hre.network.provider.send("evm_setNextBlockTimestamp", [startTs + 10]);
+
+      const balBefore = await ethers.provider.getBalance(newTreasury);
+
+      const weiValue = ethers.parseEther("1");
+      await presale.connect(alice).buy(alice.address, { value: weiValue });
+
+      const balAfter = await ethers.provider.getBalance(newTreasury);
+      expect(balAfter).to.be.gt(balBefore);
+    });
+});
 
   // ---- Admin functions ----
   describe("admin", function () {
     it("owner can set rate/times/caps", async () => {
-      await expect(presale.setRate(ethers.parseUnits("200", 18))).to.emit(
-        presale,
-        "RateUpdated"
-      );
-      await expect(presale.setTimes(startTs, endTs + 100)).to.emit(
-        presale,
-        "TimesUpdated"
-      );
-      await expect(
-        presale.setCaps(toWad(200_000), toWad(5), toWad(50_000))
-      ).to.emit(presale, "CapsUpdated");
+      await expect(presale.setRate(ethers.parseUnits("200", 18))).to.emit(presale, "RateUpdated");
+      await expect(presale.setTimes(startTs, endTs + 100)).to.emit(presale, "TimesUpdated");
+      await expect(presale.setCaps(toWad(200_000), toWad(5), toWad(50_000))).to.emit(presale, "CapsUpdated");
     });
 
     it("pause/unpause works", async () => {
       await presale.pause();
-      await hre.network.provider.send("evm_setNextBlockTimestamp", [
-        startTs + 10,
-      ]);
+      await fastForwardTo(startTs + 10);
       await expect(
-        presale
-          .connect(alice)
-          .buy(alice.address, { value: ethers.parseEther("1") })
+        presale.connect(alice).buy(alice.address, { value: ethers.parseEther("1") })
       ).to.be.revertedWith("Pausable: paused");
 
       await presale.unpause();
       await expect(
-        presale
-          .connect(alice)
-          .buy(alice.address, { value: ethers.parseEther("1") })
+        presale.connect(alice).buy(alice.address, { value: ethers.parseEther("1") })
       ).to.not.be.reverted;
-    });
-  });
-
-  // // ---- Withdraw ----
-  describe("funds", function () {
-    it("owner can withdraw ETH", async () => {
-      await hre.network.provider.send("evm_setNextBlockTimestamp", [
-        startTs + 10,
-      ]);
-      await presale
-        .connect(alice)
-        .buy(alice.address, { value: ethers.parseEther("1") });
-
-      const balBefore = await ethers.provider.getBalance(deployer.address);
-      const tx = await presale.withdrawFunds(
-        deployer.address,
-        ethers.parseEther("1")
-      );
-      await tx.wait();
-      const balAfter = await ethers.provider.getBalance(deployer.address);
-      expect(balAfter).to.be.gt(balBefore);
-    });
-
-    it("owner cannot recover sale token", async () => {
-      await expect(
-        presale.recoverERC20(await token.getAddress(), deployer.address, 100)
-      ).to.be.revertedWithCustomError(presale, "InvalidParams");
     });
   });
 
@@ -655,6 +927,35 @@ describe("PreSellMagaFox", function () {
         presale,
         "VestingAllowanceApproved"
       );
+    });
+  });
+
+
+
+/   // // ---- Withdraw ----
+  describe("funds", function () {
+    // it("owner can withdraw ETH", async () => {
+    //   await hre.network.provider.send("evm_setNextBlockTimestamp", [
+    //     startTs + 10,
+    //   ]);
+    //   await presale
+    //     .connect(alice)
+    //     .buy(alice.address, { value: ethers.parseEther("1") });
+
+    //   const balBefore = await ethers.provider.getBalance(deployer.address);
+    //   const tx = await presale.withdrawFunds(
+    //     deployer.address,
+    //     ethers.parseEther("1")
+    //   );
+    //   await tx.wait();
+    //   const balAfter = await ethers.provider.getBalance(deployer.address);
+    //   expect(balAfter).to.be.gt(balBefore);
+    // });
+
+    it("owner cannot recover sale token", async () => {
+      await expect(
+        presale.recoverERC20(await token.getAddress(), deployer.address, 100)
+      ).to.be.revertedWithCustomError(presale, "InvalidParams");
     });
   });
 });

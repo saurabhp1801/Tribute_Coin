@@ -24,7 +24,7 @@ module.exports = {
       accounts: process.env.PRIVATE_KEY ? [process.env.PRIVATE_KEY] : [],
     },
   },
-  etherscan: {
+  etherscan: {                                                 
     apiKey: process.env.ETHERSCAN_API_KEY || "",
   },
   gasReporter: {

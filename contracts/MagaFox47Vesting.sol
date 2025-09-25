@@ -154,21 +154,28 @@ contract MAGAFox47Vesting is Ownable, ReentrancyGuard {
     error AlreadyRevoked();
     error NotRevocable();
     error TokenIsVestingToken(); // for recoverERC20
+    error AdjustNotAllowed();
 
-    // ---------- Token & accounting ----------
+    /*//////////////////////////////////////////////////////////////
+                              CONSTANTS
+    //////////////////////////////////////////////////////////////*/
+
+    // ---------- Static Vesting Parameters ----------
+    uint32 private constant _START_DELAY = 30 days; // vesting starts after 30 days
+    uint32 private constant _CLIFF = 90 days; // 1 month cliff
+    uint32 private constant _DURATION = 270 days; // 6 months vesting
+    uint32 private constant _SLICE = 1 days; // daily release
+
+    /*//////////////////////////////////////////////////////////////
+                              IMMUTABLES
+    //////////////////////////////////////////////////////////////*/
     IERC20 public immutable token; // dedicated ERC20 (MAGAFox47)
-    uint256 public totalLocked; // tracks (sum of schedule.total - schedule.released) across all active schedules
-    // // ---------- Static Vesting Parameters ----------
-    // uint32 private constant _START_DELAY = 30 days; // vesting starts after 30 days
-    // uint32 private constant _CLIFF = 30 days; // 1 month cliff
-    // uint32 private constant _DURATION = 180 days; // 6 months vesting
-    // uint32 private constant _SLICE = 1 days; // daily release
 
-    // ---------- Test Vesting Parameters ----------
-    uint32 private constant _START_DELAY = 1 hours; // vesting starts after 1 hour
-    uint32 private constant _CLIFF = 1 hours; // 1 hour cliff
-    uint32 private constant _DURATION = 6 hours; // total vesting period 6 hours
-    uint32 private constant _SLICE = 1 hours; // release every 1 hour
+    uint256 public totalLocked; // tracks (sum of schedule.total - schedule.released) across all active schedules
+
+ 
+    // ---------- Owner can adjust flag ----------
+    bool public ownerCanAdjustTime;
 
     // ---------- Whitelist ----------
     bool public whitelistEnabled;
@@ -201,7 +208,9 @@ contract MAGAFox47Vesting is Ownable, ReentrancyGuard {
 
     uint128 private _nonce; // for unique id derivation
 
-    // ---------- Events ----------
+    /*//////////////////////////////////////////////////////////////
+                                EVENTS
+    //////////////////////////////////////////////////////////////*/
     event ScheduleCreated(
         bytes32 indexed id,
         address indexed beneficiary,
@@ -227,12 +236,21 @@ contract MAGAFox47Vesting is Ownable, ReentrancyGuard {
     event SurplusWithdrawn(address indexed to, uint256 amount);
     event Funded(address indexed from, uint256 amount);
     event WhitelistUpdated(address indexed user, bool status);
+    // New event
+    event VestingTimeAdjusted(
+        bytes32 indexed id,
+        uint32 newStart,
+        uint32 newCliff,
+        uint32 newDuration,
+        uint32 newSlice
+    );
 
     // ---------- Constructor ----------
-    constructor(address tokenAddress) {
+    constructor(address tokenAddress, bool canAdjustTime) {
         if (tokenAddress == address(0)) revert ZeroAddress();
         token = IERC20(tokenAddress);
         whitelistEnabled = false; // whitelist is off by default
+        ownerCanAdjustTime = canAdjustTime; // set flag at deployment
     }
 
     // ---------- Create schedules ----------
@@ -246,10 +264,10 @@ contract MAGAFox47Vesting is Ownable, ReentrancyGuard {
     function lock(
         address beneficiary,
         uint128 amount,
-        uint32 start, //1 sept
-        uint32 cliff, // 1 month
-        uint32 duration, //total vesting peiod 6 month
-        uint32 slice, //how often token relese exm every 30 days
+        uint32 start,
+        uint32 cliff,
+        uint32 duration,
+        uint32 slice,
         bool revocable
     ) external nonReentrant returns (bytes32 id) {
         if (whitelistEnabled && !whitelisted[beneficiary])
@@ -267,14 +285,13 @@ contract MAGAFox47Vesting is Ownable, ReentrancyGuard {
         Schedule storage s = _schedules[id];
 
         //populate the schedule details
-        s.beneficiary = beneficiary; // Address who will receive vested tokens
-        s.start = start; // Vesting start timestamp
-        s.cliff = cliff; //Cliff duration (time until first release)
-        s.duration = duration; //Total vesting length
-        s.total = amount; // Total tokens locked for this schedule
-        s.slice = slice; // Interval for linear vesting (time-based)
-        s.flags = revocable ? _F_REVOCABLE : 0; // Store revocable flag if applicable
-        // revokedAt defaults to 0
+        s.beneficiary = beneficiary;
+        s.start = start;
+        s.cliff = cliff;
+        s.duration = duration;
+        s.total = amount;
+        s.slice = slice;
+        s.flags = revocable ? _F_REVOCABLE : 0;
 
         totalLocked += amount;
 
@@ -573,6 +590,33 @@ contract MAGAFox47Vesting is Ownable, ReentrancyGuard {
         }
     }
 
+    // ---------- Functions to toggle ownerCanAdjustTime ----------
+    function setOwnerCanAdjustTime(bool allowed) external onlyOwner {
+        ownerCanAdjustTime = allowed;
+    }
+
+    // ---------- New function: adjust vesting time ----------
+    function adjustVestingTime(
+        bytes32 id,
+        uint32 newStart,
+        uint32 newCliff,
+        uint32 newDuration,
+        uint32 newSlice
+    ) external onlyOwner {
+        if (!ownerCanAdjustTime) revert AdjustNotAllowed();
+
+        Schedule storage s = _schedules[id];
+        if (s.beneficiary == address(0)) revert ScheduleNotFound();
+        if (s.released > 0) revert InvalidParams();
+
+        s.start = newStart;
+        s.cliff = newCliff;
+        s.duration = newDuration;
+        s.slice = newSlice;
+
+        emit VestingTimeAdjusted(id, newStart, newCliff, newDuration, newSlice);
+    }
+
     /**
      * @notice Withdraw any *surplus* MAGAFox47 tokens not reserved by active schedules.
      *         Surplus = token.balanceOf(this) - totalLocked
@@ -658,7 +702,6 @@ contract MAGAFox47Vesting is Ownable, ReentrancyGuard {
             timestamp > type(uint32).max ? type(uint32).max : timestamp
         );
         // If revoked, cap at revoke time
-        // if (s.revoked && ts > s.revokedAt) ts = s.revokedAt;
         if (s.revokedAt != 0 && ts > s.revokedAt) ts = s.revokedAt;
         return _vestedAmountAt(s, ts);
     }

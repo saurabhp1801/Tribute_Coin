@@ -61,7 +61,7 @@ async function deployFixture() {
 
   // Deploy vesting pointing to this token
   const Vesting = await ethers.getContractFactory("MAGAFox47Vesting");
-  const vesting = await Vesting.deploy(await token.getAddress());
+  const vesting = await Vesting.deploy(await token.getAddress(),true);
   await vesting.waitForDeployment();
 
   return { owner, alice, bob, carol, treasury, stranger, token, vesting };
@@ -170,7 +170,7 @@ describe("MAGAFox47Vesting", function () {
 
     it("reverts on zero token addr", async () => {
       const Vesting = await ethers.getContractFactory("MAGAFox47Vesting");
-      await expect(Vesting.deploy(ethers.ZeroAddress)).to.be.reverted;
+      await expect(Vesting.deploy(ethers.ZeroAddress,true)).to.be.reverted;
     });
   });
 
@@ -1075,7 +1075,7 @@ describe("MAGAFox47Vesting", function () {
       const startDelay = 30 * 24 * 60 * 60; // 30 days
 const expectedStart = now + startDelay;
       // const duration = 86400; // 1 day
-      const duration = 180 * 24 * 60 * 60; // 180 days in seconds
+      const duration = 270 * 24 * 60 * 60; // 180 days in seconds
       await token.approve(await vesting.getAddress(), amount);
       await vesting.staticLock(alice.address, amount, false);
 
@@ -1083,7 +1083,6 @@ const expectedStart = now + startDelay;
       expect(ids.length).to.equal(1);
 
       const schedule = await vesting.getSchedule(ids[0]);
-
       expect(schedule[0]).to.equal(alice.address); // beneficiary
       expect(schedule[9]).to.equal(0n); // released
       expect(schedule[8]).to.equal(amount); // total
@@ -1114,7 +1113,7 @@ const expectedStart = now + startDelay;
       const amount1 = toWad(100);
       const amount2 = toWad(200);
       // const duration = 86400;
-      const duration = 180 * 24 * 60 * 60; // 180 days in seconds
+      const duration = 270 * 24 * 60 * 60; // 180 days in seconds
 
       await token.approve(await vesting.getAddress(), amount1 + amount2);
 
@@ -1161,4 +1160,87 @@ const expectedStart = now + startDelay;
       ).to.be.revertedWithCustomError(vesting, "NotAuthorized");
     });
   });
+
+
+
+
+  describe("adjustVestingTime()", function () {
+  it("owner can adjust schedule time if flag is true and nothing released", async () => {
+    const { owner, alice } = await loadFixture(deployFixture);
+    const ctx = await createVestingFor(alice.address, toWad(100), {
+      cliff: 60,
+      duration: 300,
+      slice: 10,
+      revocable: true,
+    });
+    const { id, vesting } = ctx;
+
+    // Adjust times
+    const newStart = ctx.start + 100;
+    const newCliff = 50;
+    const newDuration = 200;
+    const newSlice = 5;
+
+    await expect(
+      vesting.adjustVestingTime(id, newStart, newCliff, newDuration, newSlice)
+    ).to.emit(vesting, "VestingTimeAdjusted");
+
+    const schedule = await vesting.getSchedule(id);
+    expect(schedule[1]).to.equal(newStart);
+    expect(schedule[2]).to.equal(newCliff);
+    expect(schedule[3]).to.equal(newDuration);
+    expect(schedule[4]).to.equal(newSlice);
+  });
+
+  it("reverts if ownerCanAdjustTime is false", async () => {
+    const { owner, alice } = await loadFixture(deployFixture);
+    const ctx = await createVestingFor(alice.address, toWad(100));
+    const { id, vesting } = ctx;
+
+    await vesting.setOwnerCanAdjustTime(false);
+
+    await expect(
+      vesting.adjustVestingTime(id, 0, 0, 0, 0)
+    ).to.be.revertedWithCustomError(vesting, "AdjustNotAllowed");
+  });
+
+  it("reverts if schedule already has released tokens", async () => {
+    const { owner, alice } = await loadFixture(deployFixture);
+    const ctx = await createVestingFor(alice.address, toWad(100));
+    const { id, vesting } = ctx;
+
+    // Move time past cliff and release some tokens
+    const s = await vesting.getSchedule(id);
+    await jumpTo(s[1] + s[2] + 1n); // start + cliff
+    await vesting.release(id, ethers.ZeroAddress);
+
+    await expect(
+      vesting.adjustVestingTime(id, 0, 0, 0, 0)
+    ).to.be.revertedWithCustomError(vesting, "InvalidParams");
+  });
+
+  it("reverts if schedule does not exist", async () => {
+    const { owner, alice } = await loadFixture(deployFixture);
+    const ctx = await loadFixture(deployFixture);
+    const fakeId = ethers.id("nonexistent");
+
+    await expect(
+      ctx.vesting.adjustVestingTime(fakeId, 0, 0, 0, 0)
+    ).to.be.revertedWithCustomError(ctx.vesting, "ScheduleNotFound");
+  });
+
+  it("ownerCanAdjustTime flag toggles correctly", async () => {
+    const { owner, alice } = await loadFixture(deployFixture);
+    const ctx = await createVestingFor(alice.address, toWad(100));
+    const { vesting } = ctx;
+
+    expect(await vesting.ownerCanAdjustTime()).to.equal(true);
+
+    await vesting.setOwnerCanAdjustTime(false);
+    expect(await vesting.ownerCanAdjustTime()).to.equal(false);
+
+    await vesting.setOwnerCanAdjustTime(true);
+    expect(await vesting.ownerCanAdjustTime()).to.equal(true);
+  });
+});
 });
