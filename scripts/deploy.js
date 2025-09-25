@@ -54,7 +54,7 @@ async function main() {
   const liquidityAuctionWallet = "0x15d34AAf54267DB7D7c367839AAf71A00a2C6A65";  // LIQUIDITY_AUCTION
   const stakingRewardsWallet = "0x9965507D1a55bcC2695C58ba16FB37d819B0A4dc";  // STAKING_REWARDS
   const liquidityMakingWallet = "0x976EA74026E726554dB657fA54763abd0C3a0aa9";  // LIQUIDITY_MAKING
-  const teamAdvisorsWallet = "0x14dC79964da2C08b23698B3D3cc7Ca32193d9955";  // TEAM_ADVISORS
+  const ownersAllocationWallet = "0x14dC79964da2C08b23698B3D3cc7Ca32193d9955";  // OWNERS_ALLOCATION
   const growthPartnershipsWallet = "0x23618e81E3f5cdF7f54C3d65f7FBc0aBf5B21E8f";  // GROWTH_PARTNERSHIPS
   const futureDAOReserveWallet = "0xa0Ee7A142d267C1f36714E4a8F75612F20a79720";  // FUTURE_DAO_RESERVE
   
@@ -70,7 +70,7 @@ async function main() {
       liquidityAuctionWallet,
       stakingRewardsWallet,
       liquidityMakingWallet,
-      teamAdvisorsWallet
+      ownersAllocationWallet      
     ];
     
     await (await magaFox.allocateWallets(walletTypes, walletAddresses)).wait();
@@ -98,7 +98,7 @@ async function main() {
       { type: 4, address: liquidityAuctionWallet, name: "LIQUIDITY_AUCTION" },
       { type: 5, address: stakingRewardsWallet, name: "STAKING_REWARDS" },
       { type: 6, address: liquidityMakingWallet, name: "LIQUIDITY_MAKING" },
-      { type: 7, address: teamAdvisorsWallet, name: "TEAM_ADVISORS" },
+      { type: 7, address: ownersAllocationWallet, name: "OWNERS_ALLOCATION" },     
       { type: 8, address: growthPartnershipsWallet, name: "GROWTH_PARTNERSHIPS" },
       { type: 9, address: futureDAOReserveWallet, name: "FUTURE_DAO_RESERVE" }
     ];

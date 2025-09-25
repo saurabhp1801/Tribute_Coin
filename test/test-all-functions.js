@@ -109,11 +109,11 @@ describe("MagaFox47", function () {
       expect(communityIDO.locked).to.equal(false);
       
       // Team Advisors (10%)
-      const teamAdvisors = await magaFox.teamAdvisors();
+      const ownersAllocation = await magaFox.ownersAllocation();        
       const expectedTeamAmount = (initialSupply * 10n) / 100n;
-      expect(teamAdvisors.totalAmount).to.equal(expectedTeamAmount);
-      expect(teamAdvisors.released).to.equal(0);
-      expect(teamAdvisors.locked).to.equal(false);
+      expect(ownersAllocation.totalAmount).to.equal(expectedTeamAmount);   
+      expect(ownersAllocation.released).to.equal(0);
+      expect(ownersAllocation.locked).to.equal(false);
     });
   });
 
@@ -400,8 +400,8 @@ describe("Transferring", function () {
       const communityIDO = await magaFox.communityIDO();
       expect(communityIDO.locked).to.equal(true);
       
-      const teamAdvisors = await magaFox.teamAdvisors();
-      expect(teamAdvisors.locked).to.equal(true);
+      const ownersAllocation = await magaFox.ownersAllocation();
+      expect(ownersAllocation.locked).to.equal(true);
       
       const stakingRewards = await magaFox.stakingRewards();
       expect(stakingRewards.locked).to.equal(true);
@@ -480,8 +480,8 @@ describe("Transferring", function () {
       
       expect(await magaFox.balanceOf(user1.address)).to.equal(releaseAmount);
       
-      const teamAdvisors = await magaFox.teamAdvisors();
-      expect(teamAdvisors.released).to.equal(releaseAmount);
+      const ownersAllocation = await magaFox.ownersAllocation();     
+      expect(ownersAllocation.released).to.equal(releaseAmount);
     });
    it("Should release private strategic funds when vested", async function () {
   // Additional time travel beyond the 90 days in beforeEach

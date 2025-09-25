@@ -51,7 +51,7 @@ contract MagaFox47 is
         LIQUIDITY_AUCTION,
         STAKING_REWARDS,
         LIQUIDITY_MAKING,
-        TEAM_ADVISORS,
+        OWNERS_ALLOCATION,
         GROWTH_PARTNERSHIPS,
         FUTURE_DAO_RESERVE
     }
@@ -85,7 +85,7 @@ contract MagaFox47 is
     TokenAllocation public liquidityAuction; // 5%
     TokenAllocation public stakingRewards; // 15%
     TokenAllocation public liquidityMaking; // 10%
-    TokenAllocation public teamAdvisors; // 10%
+    TokenAllocation public ownersAllocation; // 10%
     TokenAllocation public growthPartnerships; // 8%
     TokenAllocation public futureDaoReserve; // 10%
 
@@ -246,7 +246,7 @@ contract MagaFox47 is
         });
 
         // 10% for team & advisors (12m cliff → 36m linear)
-        teamAdvisors = TokenAllocation({
+        ownersAllocation = TokenAllocation({ 
             totalAmount: (totalSupply * 10) / 100,
             released: 0,
             startTime: now_ + oneYear, // 12m cliff
@@ -425,7 +425,7 @@ contract MagaFox47 is
         liquidityAuction.locked = true;
         stakingRewards.locked = true;
         liquidityMaking.locked = true;
-        teamAdvisors.locked = true;
+        ownersAllocation.locked = true;  
         growthPartnerships.locked = true;
         futureDaoReserve.locked = true;
 
@@ -558,7 +558,7 @@ contract MagaFox47 is
         if (allocationType == 4) return liquidityAuction;
         if (allocationType == 5) return stakingRewards;
         if (allocationType == 6) return liquidityMaking;
-        if (allocationType == 7) return teamAdvisors;
+        if (allocationType == 7) return ownersAllocation;
         if (allocationType == 8) return growthPartnerships;
         if (allocationType == 9) return futureDaoReserve;
         revert InvalidInput();
@@ -576,7 +576,7 @@ contract MagaFox47 is
         if (allocationType == 4) return "LiquidityAuction";
         if (allocationType == 5) return "StakingRewards";
         if (allocationType == 6) return "LiquidityMaking";
-        if (allocationType == 7) return "TeamAdvisors";
+        if (allocationType == 7) return "ownersAllocation";   
         if (allocationType == 8) return "GrowthPartnerships";
         if (allocationType == 9) return "FutureDaoReserve";
         revert InvalidInput();
