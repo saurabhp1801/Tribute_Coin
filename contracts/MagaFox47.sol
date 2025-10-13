@@ -42,6 +42,13 @@ contract MagaFox47 is
     uint256 public transactionFeePercent; // 100 = 1%
     mapping(address => bool) public hasAddressMinted;
 
+    // Protocol Fee Wallet
+    address public protocolFeeWallet;
+
+     // Whitelisted addresses (exempt from fees)
+    mapping(address => bool) public isWhitelisted;
+
+
     // Wallet addresses
     enum WalletType {
         CHARITY_TREASURY,
@@ -78,16 +85,16 @@ contract MagaFox47 is
     }
 
     // Core tokenomics allocations
-    TokenAllocation public charityTreasury; // 20% 
-    TokenAllocation public seed; // 5%    
-    TokenAllocation public privateStrategic; // 7%  
-    TokenAllocation public communityIDO; // 10%    
-    TokenAllocation public liquidityAuction; // 5%   
-    TokenAllocation public stakingRewards; // 13%    
-    TokenAllocation public liquidityMaking; // 9%    
-    TokenAllocation public ownersAllocation; // 15%   
-    TokenAllocation public growthPartnerships; // 8%  
-    TokenAllocation public futureDaoReserve; // 8%   
+    TokenAllocation public charityTreasury; // 20%
+    TokenAllocation public seed; // 5%
+    TokenAllocation public privateStrategic; // 7%
+    TokenAllocation public communityIDO; // 10%
+    TokenAllocation public liquidityAuction; // 5%
+    TokenAllocation public stakingRewards; // 13%
+    TokenAllocation public liquidityMaking; // 9%
+    TokenAllocation public ownersAllocation; // 15%
+    TokenAllocation public growthPartnerships; // 8%
+    TokenAllocation public futureDaoReserve; // 8%
 
     // Events - consolidated to reduce bytecode
     event WalletAction(uint8 actionType, WalletType walletType, address wallet);
@@ -104,6 +111,15 @@ contract MagaFox47 is
         string name,
         uint256 amount
     );
+    event FeeDistribution(
+        address indexed from,
+        address indexed to,
+        uint256 amountSent,
+        uint256 burned,
+        uint256 protocolFee
+    );
+
+     event WhitelistUpdated(address indexed account, bool isWhitelisted);
 
     /**
      * @dev Constructor initializes the token with all core settings
@@ -225,7 +241,7 @@ contract MagaFox47 is
         uint256 oneMonth = 30 days;
         uint256 oneYear = 365 days;
 
-        // 15% for staking rewards (supply-halving every 18m)
+        // 13% for staking rewards (supply-halving every 18m)
         stakingRewards = TokenAllocation({
             totalAmount: (totalSupply * 13) / 100,
             released: 0,
@@ -235,7 +251,7 @@ contract MagaFox47 is
             locked: false
         });
 
-        // 10% for liquidity & market-making (12m lock, DAO-controlled)
+        // 9% for liquidity & market-making (12m lock, DAO-controlled)
         liquidityMaking = TokenAllocation({
             totalAmount: (totalSupply * 9) / 100,
             released: 0,
@@ -245,8 +261,8 @@ contract MagaFox47 is
             locked: false
         });
 
-        // 10% for team & advisors (12m cliff → 36m linear)
-        ownersAllocation = TokenAllocation({ 
+        // 15% for team & advisors (12m cliff → 36m linear)
+        ownersAllocation = TokenAllocation({
             totalAmount: (totalSupply * 15) / 100,
             released: 0,
             startTime: now_ + oneYear, // 12m cliff
@@ -380,6 +396,7 @@ contract MagaFox47 is
             revert InvalidInput();
         }
     }
+
     /**
      * @notice Donate tokens to approved charity
      */
@@ -425,7 +442,7 @@ contract MagaFox47 is
         liquidityAuction.locked = true;
         stakingRewards.locked = true;
         liquidityMaking.locked = true;
-        ownersAllocation.locked = true;  
+        ownersAllocation.locked = true;
         growthPartnerships.locked = true;
         futureDaoReserve.locked = true;
 
@@ -438,7 +455,7 @@ contract MagaFox47 is
     function _vestedAmount(
         TokenAllocation storage allocation
     ) private view returns (uint256) {
-        uint256 oneMonth = 30 days;
+        // uint256 oneMonth = 30 days;
 
         // Special case for DAO reserve (requires governance vote)
         if (allocation.duration == 0) {
@@ -455,16 +472,22 @@ contract MagaFox47 is
             return allocation.totalAmount;
         }
 
-        // For staking rewards - supply halving mechanism
-        if (_isStakingRewards(allocation)) {
-            return _calculateStakingVestedAmount(allocation, oneMonth);
-        }
-
         // Linear vesting after cliff
         return
             (allocation.totalAmount *
                 (block.timestamp - allocation.startTime)) / allocation.duration;
     }
+
+
+
+
+   // Add this in your MagaFox47 contract
+function getVestedAmount(uint8 allocationType) external view returns (uint256) {
+    TokenAllocation storage allocation = _getAllocationByType(allocationType);
+    return _vestedAmount(allocation);
+}
+
+ 
 
     /**
      * @notice Helper to identify staking rewards allocation
@@ -477,39 +500,6 @@ contract MagaFox47 is
             allocation.duration == stakingRewards.duration);
     }
 
-    /**
-     * @notice Calculate vested amount for staking rewards with halving
-     */
-    function _calculateStakingVestedAmount(
-        TokenAllocation storage allocation,
-        uint256 oneMonth
-    ) private view returns (uint256) {
-        uint256 elapsed = block.timestamp - allocation.startTime;
-        uint256 halfCycle = (oneMonth * 18);
-        uint256 cycleCount = elapsed / halfCycle;
-        // This is NOT randomness — it's purely vesting math
-        // uint256 cycleRemainder = elapsed % halfCycle;
-        uint256 cycleRemainder = elapsed - (cycleCount * halfCycle); // same as % but no modulo op
-
-        uint256 releasedForCycles = 0;
-        uint256 remaining = allocation.totalAmount;
-
-        // Calculate full cycles
-        for (uint256 i = 0; i < cycleCount; i++) {
-            uint256 cycleRelease = remaining / 2;
-            releasedForCycles += cycleRelease;
-            remaining -= cycleRelease;
-        }
-
-        // Add partial cycle
-        if (cycleRemainder > 0) {
-            uint256 partialCycleRelease = ((remaining / 2) * cycleRemainder) /
-                halfCycle;
-            releasedForCycles += partialCycleRelease;
-        }
-
-        return releasedForCycles;
-    }
 
     /**
      * @notice Release tokens from any allocation (consolidated to save bytecode)
@@ -576,7 +566,7 @@ contract MagaFox47 is
         if (allocationType == 4) return "LiquidityAuction";
         if (allocationType == 5) return "StakingRewards";
         if (allocationType == 6) return "LiquidityMaking";
-        if (allocationType == 7) return "ownersAllocation";   
+        if (allocationType == 7) return "ownersAllocation";
         if (allocationType == 8) return "GrowthPartnerships";
         if (allocationType == 9) return "FutureDaoReserve";
         revert InvalidInput();
@@ -625,9 +615,13 @@ contract MagaFox47 is
         mint(to, amount, false);
     }
 
+   
+
+
     /**
-     * @notice Override transfer to implement fees
+     * @notice Override transfer to implement fees (burn + send to protocolFeeWallet)
      */
+
     function _transfer(
         address from,
         address to,
@@ -635,56 +629,40 @@ contract MagaFox47 is
     ) internal virtual override {
         if (paused()) revert ContractState("Paused");
 
+        // --- Skip fees if disabled, if transferring from/to contract itself,
+        // --- if protocol wallet not set, OR if from/to is whitelisted
         if (
             !transactionFeesEnabled ||
             from == address(this) ||
-            to == address(this)
+            to == address(this) ||
+            protocolFeeWallet == address(0) ||
+            isWhitelisted[from] ||
+            isWhitelisted[to]
         ) {
             super._transfer(from, to, amount);
             return;
         }
 
-        uint256 totalFeeAmount = (amount * 150) / 10000; // 1.5%
-        uint256 totalAmount = amount + totalFeeAmount;
-
-        // Ensure sender has enough balance for both amount and fees
-        require(
-            balanceOf(from) >= totalAmount,
-            "ERC20: transfer amount plus fees exceeds balance"
-        );
-
-        // Transfer full amount to recipient
-        super._transfer(from, to, amount);
-
-        // Calculate individual fees
+        // --- Fees (1.7% total) ---
         uint256 burnAmount = (amount * 100) / 10000; // 1%
-        uint256 charityAmount = (amount * 25) / 10000; // 0.25%
-        uint256 liquidityAmount = totalFeeAmount - burnAmount - charityAmount;
+        uint256 feeAmount = (amount * 70) / 10000; // 0.7% to protocolFeeWallet
+        uint256 sendAmount = amount - burnAmount - feeAmount; // Net to recipient
 
-        // Burn 1%
-        _burn(from, burnAmount);
-
-        // Charity 0.25%
-        if (isWalletAllocated[WalletType.CHARITY_TREASURY]) {
-            super._transfer(
-                from,
-                allocatedWallets[WalletType.CHARITY_TREASURY],
-                charityAmount
-            );
-        } else {
-            super._transfer(from, to, charityAmount);
+        // Burn
+        if (burnAmount > 0) {
+            _burn(from, burnAmount);
         }
 
-        // Liquidity 0.25%
-        if (isWalletAllocated[WalletType.LIQUIDITY_MAKING]) {
-            super._transfer(
-                from,
-                allocatedWallets[WalletType.LIQUIDITY_MAKING],
-                liquidityAmount
-            );
-        } else {
-            super._transfer(from, to, liquidityAmount);
+        // Send fee to protocol wallet
+        if (feeAmount > 0) {
+            super._transfer(from, protocolFeeWallet, feeAmount);
         }
+
+        // Send remainder to recipient
+        super._transfer(from, to, sendAmount);
+
+        // Emit split details
+        emit FeeDistribution(from, to, sendAmount, burnAmount, feeAmount);
     }
 
     /**
@@ -694,6 +672,25 @@ contract MagaFox47 is
         if (paused()) revert ContractState("Paused");
         super._burn(account, amount);
     }
+
+    function setProtocolFeeWallet(address _wallet) external onlyOwner {
+        require(_wallet != address(0), "Invalid wallet");
+        protocolFeeWallet = _wallet;
+    }
+
+
+    function setWhitelist(address account, bool status) external onlyOwner {
+        require(account != address(0), "Invalid address");
+        isWhitelisted[account] = status;
+        emit WhitelistUpdated(account, status);
+    }
+
+
+
+
+
+
+
 
     /**
      * @notice Transfer admin role
@@ -732,3 +729,72 @@ contract MagaFox47 is
         return super.supportsInterface(interfaceId);
     }
 }
+
+
+
+
+
+
+
+
+ /**
+     * @notice Override transfer to implement fees
+     */
+    // function _transfer(
+    //     address from,
+    //     address to,
+    //     uint256 amount
+    // ) internal virtual override {
+    //     if (paused()) revert ContractState("Paused");
+
+    //     if (
+    //         !transactionFeesEnabled ||
+    //         from == address(this) ||
+    //         to == address(this)
+    //     ) {
+    //         super._transfer(from, to, amount);
+    //         return;
+    //     }
+
+    //     uint256 totalFeeAmount = (amount * 150) / 10000; // 1.5%
+    //     uint256 totalAmount = amount + totalFeeAmount;
+
+    //     // Ensure sender has enough balance for both amount and fees
+    //     require(
+    //         balanceOf(from) >= totalAmount,
+    //         "ERC20: transfer amount plus fees exceeds balance"
+    //     );
+
+    //     // Transfer full amount to recipient
+    //     super._transfer(from, to, amount);
+
+    //     // Calculate individual fees
+    //     uint256 burnAmount = (amount * 100) / 10000; // 1%
+    //     uint256 charityAmount = (amount * 25) / 10000; // 0.25%
+    //     uint256 liquidityAmount = totalFeeAmount - burnAmount - charityAmount;
+
+    //     // Burn 1%
+    //     _burn(from, burnAmount);
+
+    //     // Charity 0.25%
+    //     if (isWalletAllocated[WalletType.CHARITY_TREASURY]) {
+    //         super._transfer(
+    //             from,
+    //             allocatedWallets[WalletType.CHARITY_TREASURY],
+    //             charityAmount
+    //         );
+    //     } else {
+    //         super._transfer(from, to, charityAmount);
+    //     }
+
+    //     // Liquidity 0.25%
+    //     if (isWalletAllocated[WalletType.LIQUIDITY_MAKING]) {
+    //         super._transfer(
+    //             from,
+    //             allocatedWallets[WalletType.LIQUIDITY_MAKING],
+    //             liquidityAmount
+    //         );
+    //     } else {
+    //         super._transfer(from, to, liquidityAmount);
+    //     }
+    // }
