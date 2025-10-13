@@ -622,6 +622,178 @@ describe("MAGAFox47Vesting", function () {
     });
   });
 
+
+// describe("release()", () => {
+//     async function createVestingFor(who, amount, params = {}) {
+//       const { owner, token, vesting } = await loadFixture(deployFixture);
+//       const now = await time.latest();
+//       const start = params?.start ?? now;
+//       const cliff = params?.cliff ?? 3600;
+//       const duration = params?.duration ?? 3600 * 24 * 30;
+//       const slice = params?.slice ?? 3600;
+//       const revocable = params?.revocable ?? true;
+
+//       await token.approve(await vesting.getAddress(), amount);
+//       const tx = await vesting.lock(
+//         who,
+//         amount,
+//         start,
+//         cliff,
+//         duration,
+//         slice,
+//         revocable
+//       );
+//       const rc = await tx.wait();
+//       const ev = rc.logs.find((l) => l.fragment?.name === "ScheduleCreated");
+//       const id = ev.args.id;
+
+//       return {
+//         id,
+//         start,
+//         cliff,
+//         duration,
+//         slice,
+//         amount,
+//         vesting,
+//         token,
+//         owner,
+//       };
+//     }
+
+//     it("only beneficiary or owner can release; respects `to`", async () => {
+//       const { alice, bob, stranger } = await loadFixture(deployFixture);
+//       const { id, vesting } = await createVestingFor(alice.address, toWad(100));
+
+//       // nobody releases before cliff/time -> revert NothingToRelease
+//       await expect(
+//         vesting.connect(alice).release(id, ethers.ZeroAddress)
+//       ).to.be.revertedWithCustomError(vesting, "NothingToRelease");
+
+//       // stranger cannot release
+//       await expect(
+//         vesting.connect(stranger).release(id, ethers.ZeroAddress)
+//       ).to.be.revertedWithCustomError(vesting, "NotAuthorized");
+
+//       // jump beyond cliff/time
+//       const s = await vesting.getSchedule(id);
+//       const start_ = s[1]; // bigint
+//       const cliff_ = s[2]; // bigint
+
+//       // move time to just past start + cliff
+//       await jumpTo(start_ + cliff_ + 10n);
+
+//       // owner can release to custom recipient
+//       // Ensure custom _transfer method is invoked
+//       await expect(vesting.release(id, bob.address))
+//         .to.emit(vesting, "TokensReleased")
+//         .withArgs(id, alice.address, bob.address, toWad(100));  // Expecting 100 tokens to be released after all logic applied
+//     });
+
+//     it("linear vesting with slice flooring", async () => {
+//       const { alice } = await loadFixture(deployFixture);
+//       const amount = toWad(90);
+//       const cliff = 10;
+//       const duration = 90;
+//       const slice = 10;
+
+//       const { id, start, vesting, token } = await createVestingFor(
+//         alice.address,
+//         amount,
+//         { cliff, duration, slice }
+//       );
+
+//       // before cliff -> 0
+//       await jumpTo(start + cliff - 1);
+//       expect(await vesting.releasableAmount(id)).to.equal(0n);
+
+//       // at cliff -> floor to one slice (10/90) => 10/90 * 90 = 10 vested
+//       await jumpTo(start + cliff);
+//       let exp = expectedVested(
+//         amount,
+//         start,
+//         cliff,
+//         duration,
+//         slice,
+//         start + cliff
+//       );
+//       expect(exp).to.equal(toWad(10)); // 10 tokens (since total=90 and duration=90 => 1 per second, slice 10 => 10)
+//       await expect(vesting.connect(alice).release(id, ethers.ZeroAddress))
+//         .to.emit(vesting, "TokensReleased")
+//         .withArgs(id, alice.address, alice.address, exp);
+
+//       // halfway (+45s): slice floors to 40 -> vested = 40
+//       await jumpTo(start + 45);
+//       exp = expectedVested(amount, start, cliff, duration, slice, start + 45);
+//       expect(exp).to.equal(toWad(40));
+//       const schedMid = await vesting.getSchedule(id);
+//       const releasedSoFar = schedMid[9]; // tuple index for 'released'
+//       const toRelease = exp - releasedSoFar;
+//       await expect(vesting.connect(alice).release(id, ethers.ZeroAddress))
+//         .to.emit(vesting, "TokensReleased")
+//         .withArgs(id, alice.address, alice.address, toRelease);
+
+//       // at end
+//       await jumpTo(start + duration);
+//       exp = expectedVested(
+//         amount,
+//         start,
+//         cliff,
+//         duration,
+//         slice,
+//         start + duration
+//       );
+//       expect(exp).to.equal(amount);
+//       const schedEnd = await vesting.getSchedule(id);
+//       const relEnd = schedEnd[9];
+//       await expect(vesting.connect(alice).release(id, ethers.ZeroAddress))
+//         .to.emit(vesting, "TokensReleased")
+//         .withArgs(id, alice.address, alice.address, exp - relEnd);
+
+//       // balances match total
+//       expect(await token.balanceOf(alice.address)).to.equal(amount);
+//     });
+
+//     it("releasing multiple schedules aggregates in view", async () => {
+//       // one deployment for both schedules
+//       const ctx = await loadFixture(deployFixture);
+//       const { alice, vesting } = ctx;
+
+//       // create both schedules on the SAME vesting
+//       const A = await createVestingOn(ctx, alice.address, toWad(100), {
+//         cliff: 0,
+//         duration: 100,
+//         slice: 1,
+//       });
+//       const B = await createVestingOn(ctx, alice.address, toWad(50), {
+//         cliff: 0,
+//         duration: 50,
+//         slice: 5,
+//       });
+
+//       // jump to a single timestamp (use the same 't' for both)
+//       const t = A.start + 25;
+//       await jumpTo(t);
+
+//       // contract aggregate
+//       const sum = await vesting.releasableAmountFor(alice.address);
+
+//       const sA = await vesting.getSchedule(A.id);
+//       const sB = await vesting.getSchedule(B.id);
+//       const relA = sA[9];
+//       const relB = sB[9];
+
+//       const expA =
+//         expectedVested(A.amount, A.start, 0, A.duration, 1, t) - relA;
+//       const expB =
+//         expectedVested(B.amount, B.start, 0, B.duration, 5, t) - relB;
+
+//       expect(sum).to.equal(expA + expB);
+//     });
+//   });
+
+
+
+
   describe("revoke()", () => {
     it("only owner; only revocable; cannot double revoke", async () => {
       const { alice, stranger } = await loadFixture(deployFixture);
@@ -1072,10 +1244,12 @@ describe("MAGAFox47Vesting", function () {
 
       const amount = toWad(100);
       const now = await time.latest();
-      const startDelay = 30 * 24 * 60 * 60; // 30 days
-const expectedStart = now + startDelay;
+      // const startDelay = 30 * 24 * 60 * 60; // 30 days
+      const startDelay = 12 * 60 * 60; // 12 hours
+       const expectedStart = now + startDelay;
       // const duration = 86400; // 1 day
-      const duration = 270 * 24 * 60 * 60; // 180 days in seconds
+      // const duration = 270 * 24 * 60 * 60; // 180 days in seconds
+      const duration = 3 * 24 * 60 * 60; // 3 days in seconds
       await token.approve(await vesting.getAddress(), amount);
       await vesting.staticLock(alice.address, amount, false);
 
@@ -1113,7 +1287,8 @@ const expectedStart = now + startDelay;
       const amount1 = toWad(100);
       const amount2 = toWad(200);
       // const duration = 86400;
-      const duration = 270 * 24 * 60 * 60; // 180 days in seconds
+      // const duration = 270 * 24 * 60 * 60; // 180 days in seconds
+      const duration = 3 * 24 * 60 * 60; // 3 days in seconds
 
       await token.approve(await vesting.getAddress(), amount1 + amount2);
 

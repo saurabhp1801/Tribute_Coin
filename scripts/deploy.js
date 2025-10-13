@@ -140,65 +140,65 @@ async function main() {
   }
   
   // Time travel to simulate vesting period (for testing purposes only - won't work on real networks)
-  if (hardhat.network.name === "hardhat" || hardhat.network.name === "localhost") {
-    console.log("\nSimulating time passage for vesting (only works on local networks)...");
-    try {
-      await ethers.provider.send("evm_increaseTime", [180 * 24 * 60 * 60]); // 180 days
-      await ethers.provider.send("evm_mine", []);
-      console.log("Time advanced by 180 days for testing");
-    } catch (error) {
-      console.error("Error advancing time:", error.message);
-    }
-  }
+  // if (hardhat.network.name === "hardhat" || hardhat.network.name === "localhost") {
+  //   console.log("\nSimulating time passage for vesting (only works on local networks)...");
+  //   try {
+  //     await ethers.provider.send("evm_increaseTime", [180 * 24 * 60 * 60]); // 180 days
+  //     await ethers.provider.send("evm_mine", []);
+  //     console.log("Time advanced by 180 days for testing");
+  //   } catch (error) {
+  //     console.error("Error advancing time:", error.message);
+  //   }
+  // }
   
   // Demonstrate private strategic token distribution
-  console.log("\n--- EXAMPLE: Private Strategic Investor Distribution ---");
+  // console.log("\n--- EXAMPLE: Private Strategic Investor Distribution ---");
   
-  // Example list of private strategic investors
-  const privateInvestors = [
-    { address: "0xBcd4042DE499D14e55001CcbB24a551F3b954096", amount: "5000000" },  // 5M tokens
-    { address: "0x71bE63f3384f5fb98995898A86B02Fb2426c5788", amount: "10000000" }, // 10M tokens
-  ];
+  // // Example list of private strategic investors
+  // const privateInvestors = [
+  //   { address: "0xBcd4042DE499D14e55001CcbB24a551F3b954096", amount: "5000000" },  // 5M tokens
+  //   { address: "0x71bE63f3384f5fb98995898A86B02Fb2426c5788", amount: "10000000" }, // 10M tokens
+  // ];
   
-  console.log("Distributing tokens to private strategic investors (demonstration):");
-  for (let i = 0; i < privateInvestors.length; i++) {
-    const investor = privateInvestors[i];
-    console.log(`Releasing ${investor.amount} tokens to investor ${i+1}: ${investor.address}`);
+  // console.log("Distributing tokens to private strategic investors (demonstration):");
+  // for (let i = 0; i < privateInvestors.length; i++) {
+  //   const investor = privateInvestors[i];
+  //   console.log(`Releasing ${investor.amount} tokens to investor ${i+1}: ${investor.address}`);
     
-    try {
-      // Convert to wei units (18 decimals)
-      const amount = ethers.parseUnits(investor.amount, 18);
-      // Using allocation type 2 for PRIVATE_STRATEGIC
-      await (await magaFox.releaseTokens(2, investor.address, amount)).wait();
+  //   try {
+  //     // Convert to wei units (18 decimals)
+  //     const amount = ethers.parseUnits(investor.amount, 18);
+  //     // Using allocation type 2 for PRIVATE_STRATEGIC
+  //     await (await magaFox.releaseTokens(2, investor.address, amount)).wait();
       
-      console.log(`Success: Released ${investor.amount} tokens to investor ${i+1}`);
-    } catch (error) {
-      console.error(`Failed to release to investor ${i+1}: ${error.message}`);
+  //     console.log(`Success: Released ${investor.amount} tokens to investor ${i+1}`);
+  //   } catch (error) {
+  //     console.error(`Failed to release to investor ${i+1}: ${error.message}`);
       
-      // If we're on a test network, try with a smaller amount
-      if (hardhat.network.name === "hardhat" || hardhat.network.name === "localhost") {
-        try {
-          console.log("Trying with a smaller amount...");
-          const smallerAmount = ethers.parseUnits("100000", 18); // 100K tokens
-          await (await magaFox.releaseTokens(2, investor.address, smallerAmount)).wait();
-          console.log(`Success: Released 100,000 tokens to investor ${i+1}`);
-        } catch (innerError) {
-          console.error(`Still failed with smaller amount: ${innerError.message}`);
-        }
-      }
-    }
-  }
+  //     // If we're on a test network, try with a smaller amount
+  //     if (hardhat.network.name === "hardhat" || hardhat.network.name === "localhost") {
+  //       try {
+  //         console.log("Trying with a smaller amount...");
+  //         const smallerAmount = ethers.parseUnits("100000", 18); // 100K tokens
+  //         await (await magaFox.releaseTokens(2, investor.address, smallerAmount)).wait();
+  //         console.log(`Success: Released 100,000 tokens to investor ${i+1}`);
+  //       } catch (innerError) {
+  //         console.error(`Still failed with smaller amount: ${innerError.message}`);
+  //       }
+  //     }
+  //   }
+  // }
   
   // Example: Release COMMUNITY_IDO funds which should have some available immediately
-  try {
-    const idoAmount = ethers.parseUnits("1000000", 18); // 1M tokens
-    console.log(`\nReleasing ${ethers.formatUnits(idoAmount, 18)} tokens from COMMUNITY_IDO...`);
-    // Use allocationType 3 for COMMUNITY_IDO
-    await (await magaFox.releaseTokens(3, communityIDOWallet, idoAmount)).wait();
-    console.log("COMMUNITY_IDO tokens released successfully");
-  } catch (error) {
-    console.error(`Failed to release COMMUNITY_IDO funds: ${error.message}`);
-  }
+  // try {
+  //   const idoAmount = ethers.parseUnits("1000000", 18); // 1M tokens
+  //   console.log(`\nReleasing ${ethers.formatUnits(idoAmount, 18)} tokens from COMMUNITY_IDO...`);
+  //   // Use allocationType 3 for COMMUNITY_IDO
+  //   await (await magaFox.releaseTokens(3, communityIDOWallet, idoAmount)).wait();
+  //   console.log("COMMUNITY_IDO tokens released successfully");
+  // } catch (error) {
+  //   console.error(`Failed to release COMMUNITY_IDO funds: ${error.message}`);
+  // }
   
   console.log("\nDeployment and initial setup complete!");
 }

@@ -380,9 +380,10 @@ async function main() {
   await (await token.setContractState(1, true)).wait();
   await (await token.mintWithoutRestriction(deployer.address, toWad(1_000_000_000))).wait();
 
+  const canAdjustTime = true;
   // 2) Deploy Vesting contract (real vesting)
   const Vesting = await ethers.getContractFactory("MAGAFox47Vesting");
-  const vesting = await Vesting.deploy(await token.getAddress());
+  const vesting = await Vesting.deploy(await token.getAddress(),canAdjustTime);
   await vesting.waitForDeployment();
   console.log("✅ Vesting:", await vesting.getAddress());
 
@@ -395,12 +396,22 @@ async function main() {
   const ratePerEth = ethers.parseUnits(String(tokensPerEth), 18); // 100 * 1e18
   console.log("🚀 ~ main ~ ratePerEth:", ratePerEth)
 
-  const now = Math.floor(Date.now() / 1000);
-  const saleStart = now + 60;          // start in 60s
-  const saleEnd = now + 86400;         // end after 24h
-  const hardCapTokens = toWad(10_000); // hard cap in token units (18-decimal)
-  const minPerW = toWad(10);            // min per wallet
-  const maxPerW = toWad(500);            // max per wallet (0 = no per-wallet cap)
+
+  //   const now = Math.floor(Date.now() / 1000);
+  // const saleStart = now + 60;          // start in 60s
+  // const saleEnd = now + 86400;         // end after 24h
+  // const hardCapTokens = toWad(10_000); // hard cap in token units (18-decimal)
+  // const minPerW = toWad(10);            // min per wallet
+  // const maxPerW = toWad(500); 
+
+
+
+const now = Math.floor(Date.now() / 1000);
+const saleStart = now + 12 * 60 * 60;   // start after 12 hours
+const saleEnd = now + 2 * 24 * 60 * 60; // end after 2 days
+const hardCapTokens = toWad(10_000);    // hard cap in token units (18-decimal)
+const minPerW = toWad(10);              // min per wallet
+const maxPerW = toWad(500);             // max per wallet
 
   // VestingTemplate must be passed as a tuple/array to match the struct:
   // VestingTemplate { uint32 startDelay; uint32 cliff; uint32 duration; uint32 slice; bool revocable; }

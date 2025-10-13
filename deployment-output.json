@@ -1,0 +1,9 @@
+{
+  "tokenAddress": "0x7B75fc35948d8dc3F73F5A406C4526af7F3C1aDa",
+  "vestingAddress": "0xed6344af0329684E625Ef8A791A20BC790a253f1",
+  "presaleAddress": "0x1dDDEc3dc402D85089dbBB5ac775035792680D1a",
+  "feeWalletAddress": "0xf12f289FBd578c9Aadd22296ecE4DB69C0B3b705",
+  "deployer": "0xB959c11430e039e564c1DBfCFdbE2572d643eB8a",
+  "network": "sepolia",
+  "timestamp": "2025-10-10T11:24:39.435Z"
+}

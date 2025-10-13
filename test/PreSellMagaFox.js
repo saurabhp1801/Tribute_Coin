@@ -709,10 +709,11 @@ describe("PreSellMagaFox", function () {
     await token.waitForDeployment();
     await token.setContractState(1, true);
     await token.mintWithoutRestriction(deployer.address, toWad(1_000_000_000));
+    const canAdjustTime = true; 
 
     // Deploy vesting mock
     const Vesting = await ethers.getContractFactory("MAGAFox47Vesting");
-    vesting = await Vesting.deploy(await token.getAddress());
+    vesting = await Vesting.deploy(await token.getAddress(),canAdjustTime);
     await vesting.waitForDeployment();
 
     // Sale times
